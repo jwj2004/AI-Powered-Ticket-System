@@ -6,6 +6,10 @@ __pycache__/
 venv/
 env/
 
+# 前端（C 模块）
+node_modules/
+dist/
+
 # 数据库和索引
 db/*.db
 db/*.faiss
