@@ -18,7 +18,7 @@ db/*.json
 
 # 模型缓存
 .cache/
-models/
+/models/
 
 # 日志
 logs/
