@@ -1,18 +1,18 @@
-# 知答 · 工单智能副驾 MVP
+# 知答 · 企业内部知识库智能问答 Agent
 
-一线客服粘贴客户原话，系统返回错误码释义、相似历史工单和可复制的答复草稿。
+员工登录后自由提问，系统从内部文档检索证据、带引用回答；管理员管理文档、处理知识缺口并查看数据看板。
 
 ## 环境要求
 
 - Python 3.10+
 - Node.js 18+
+- （可选）Docker / Docker Compose
 
-## 后端启动
+## 本地启动
+
+### 后端
 
 ```bash
-# 建议使用虚拟环境（示例）
-# python3.10 -m venv ~/zhida && source ~/zhida/bin/activate
-
 pip install -r requirements.txt
 python scripts/init_db.py
 python main.py
@@ -21,9 +21,7 @@ python main.py
 - 地址：http://127.0.0.1:8000
 - Swagger：http://127.0.0.1:8000/docs
 
-> 向量索引（FAISS）由 A 负责，D3 再构建；未建索引时检索可能走降级逻辑，不影响前端联调基本路径。
-
-## 前端启动
+### 前端
 
 ```bash
 cd zhida_web
@@ -33,26 +31,65 @@ npm run dev
 
 - 地址：http://127.0.0.1:5173
 
-## 默认端口
+> 前端默认 `USE_MOCK = true`（见 `zhida_web/src/api/http.js`）。接 A/B 真接口时改为 `false`。
+
+## 演示账号（mock / 种子）
+
+| 用户名 | 密码 | 角色 |
+|--------|------|------|
+| `admin` | `123456` | 管理员 |
+| `zhangsan` | `123456` | 客服/运维（ops） |
+| `lisi` | `123456` | 新人（newbie） |
+
+## Docker 启动
+
+```bash
+docker compose up -d --build
+```
 
 | 服务 | 地址 |
 |------|------|
-| 后端 FastAPI | http://127.0.0.1:8000 |
-| 前端 Vite | http://127.0.0.1:5173 |
+| 前端（nginx） | http://127.0.0.1 |
+| 后端（FastAPI） | http://127.0.0.1:8000 |
 
-## 团队分工
+SQLite 数据目录挂载：`./db` → 容器 `/app/db`。
+
+## 目录结构
+
+```
+AI-Powered-Ticket-System/
+├── main.py                 # FastAPI 入口
+├── requirements.txt
+├── docker-compose.yml
+├── Dockerfile              # 后端镜像
+├── app/                    # A：数据与检索
+├── backend/                # B：草稿/编排（演进中）
+├── scripts/                # 建库灌数等脚本
+├── data/ / seed_data/      # 种子 CSV
+├── db/                     # SQLite（gitignore）
+├── docs/                   # 开发文档与接口契约
+└── zhida_web/              # C：Vue 前端
+    ├── Dockerfile
+    ├── nginx.conf
+    ├── package.json
+    └── src/
+        ├── api/            # 接口层（含 mock）
+        ├── components/
+        ├── router/
+        └── views/          # 登录 / 问答 / 管理后台
+```
+
+## 团队分工（简述）
 
 | 角色 | 负责 |
 |------|------|
-| **A · 数据检索** | 错误码秒查、向量召回、客户上下文、埋点表；`/api/lookup`、`/api/retrieve`、`/api/feedback` |
-| **B · 草稿生成** | LLM 草稿流水线、无引用不输出；`/api/draft`（内部调 A 的 retrieve） |
-| **C · 前端与工程** | FastAPI 骨架与 CORS、Vue3 页面、接口契约与部署说明 |
+| **A · 数据与检索** | 用户/文档/向量检索、JWT、缺口与看板接口 |
+| **B · 生成与编排** | `/api/chat`、LangGraph、无引用不输出 |
+| **C · 前端与工程** | Vue 页面、mock 联调、docker-compose、README |
 
-## 核心接口（契约冻结）
+## 核心约定
 
-- `GET /api/lookup?code=XXX`
-- `POST /api/draft` body: `{ raw_text, customer_id }`
-- `POST /api/feedback` body: `{ query_id, copied, thumbs_down }`
-- `GET /api/health`
-
-字段均为 snake_case；空值用 JSON `null`；错误统一 `{"detail": "..."}` + 4xx/5xx。
+- 接口契约：`docs/接口契约.md`
+- Base URL：`http://127.0.0.1:8000`
+- 字段 snake_case；空值用 `null`；错误 `{"detail": "..."}` + 4xx/5xx
+- `confidence` 仅 `high` / `low`

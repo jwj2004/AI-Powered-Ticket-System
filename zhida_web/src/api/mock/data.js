@@ -134,7 +134,22 @@ export let MOCK_NOTIFICATIONS = [
 export const MOCK_DASHBOARD = {
   total_today: 45,
   hit_rate: 0.78,
-  top_questions: [{ question: '订单导出超时', count: 8 }],
+  top_questions: [
+    { question: '订单导出超时', count: 8 },
+    { question: '支付回调超时', count: 6 },
+    { question: '短信通道切换', count: 5 },
+    { question: '如何开通 API', count: 4 },
+    { question: '新人权限申请', count: 3 },
+  ],
+  daily_trend: [
+    { date: '09-10', count: 28 },
+    { date: '09-11', count: 32 },
+    { date: '09-12', count: 25 },
+    { date: '09-13', count: 40 },
+    { date: '09-14', count: 36 },
+    { date: '09-15', count: 42 },
+    { date: '09-16', count: 45 },
+  ],
   doc_count: 32,
   pending_gaps: 5,
 }
