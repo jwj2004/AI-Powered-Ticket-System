@@ -1,11 +1,19 @@
 import { USE_MOCK, request } from './http'
-import { MOCK_CONVERSATIONS, MOCK_CITATION_CHUNKS } from './mock/data'
+import {
+  MOCK_CONVERSATIONS,
+  MOCK_CONVERSATION_MESSAGES,
+  MOCK_CITATION_CHUNKS,
+} from './mock/data'
 
-let mockConversationId = 1
-let mockMessageId = 100
+let mockConversationId = 10
+let mockMessageId = 200
 
 function delay(ms = 600) {
   return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
+function formatNow() {
+  return new Date().toISOString().slice(0, 19)
 }
 
 /**
@@ -15,6 +23,7 @@ function delay(ms = 600) {
 export async function chat({ message, conversation_id = null }) {
   if (USE_MOCK) {
     await delay(700)
+    const isNew = conversation_id == null
     const cid = conversation_id ?? ++mockConversationId
     const mid = ++mockMessageId
     const text = message.trim()
@@ -23,8 +32,9 @@ export async function chat({ message, conversation_id = null }) {
       text.includes('不知道') ||
       text.includes('随便问问')
 
+    let replyPayload
     if (low) {
-      return {
+      replyPayload = {
         conversation_id: cid,
         reply: '这个问题我没找到可靠依据，已记录，管理员补全后会通知你。',
         citations: [],
@@ -32,10 +42,8 @@ export async function chat({ message, conversation_id = null }) {
         gap_id: 5,
         message_id: mid,
       }
-    }
-
-    if (text.includes('支付') || text.includes('回调')) {
-      return {
+    } else if (text.includes('支付') || text.includes('回调')) {
+      replyPayload = {
         conversation_id: cid,
         reply:
           '支付回调超时一般是商户平台未及时通知商城。建议：1）在支付后台确认是否已扣款；2）核对回调地址是否与当前版本一致；3）升级后注意 v4.2 的新回调路径。',
@@ -46,18 +54,47 @@ export async function chat({ message, conversation_id = null }) {
         confidence: 'high',
         message_id: mid,
       }
+    } else {
+      replyPayload = {
+        conversation_id: cid,
+        reply:
+          '订单导出超时通常是因为一次导出超过 5 万条。建议按周拆分导出，并检查导出任务队列是否堵塞。如需追问，可继续说明你们的导出条数和版本。',
+        citations: [
+          { document_id: 2, title: '订单导出超时说明', chunk_index: 3 },
+        ],
+        confidence: 'high',
+        message_id: mid,
+      }
     }
 
-    return {
-      conversation_id: cid,
-      reply:
-        '订单导出超时通常是因为一次导出超过 5 万条。建议按周拆分导出，并检查导出任务队列是否堵塞。如需追问，可继续说明你们的导出条数和版本。',
-      citations: [
-        { document_id: 2, title: '订单导出超时说明', chunk_index: 3 },
-      ],
-      confidence: 'high',
-      message_id: mid,
+    // 同步写入 mock 会话列表，便于侧边栏刷新
+    const now = formatNow()
+    if (isNew) {
+      MOCK_CONVERSATIONS.unshift({
+        conversation_id: cid,
+        title: text.slice(0, 20) || '新对话',
+        updated_at: now,
+      })
+      MOCK_CONVERSATION_MESSAGES[cid] = []
+    } else {
+      const item = MOCK_CONVERSATIONS.find((c) => c.conversation_id === cid)
+      if (item) item.updated_at = now
     }
+    if (!MOCK_CONVERSATION_MESSAGES[cid]) MOCK_CONVERSATION_MESSAGES[cid] = []
+    MOCK_CONVERSATION_MESSAGES[cid].push(
+      { role: 'user', content: text, created_at: now },
+      {
+        role: 'assistant',
+        content: replyPayload.reply,
+        citations: replyPayload.citations,
+        confidence: replyPayload.confidence,
+        message_id: replyPayload.message_id,
+        gap_id: replyPayload.gap_id ?? null,
+        created_at: now,
+      },
+    )
+
+    return replyPayload
   }
 
   return request('/api/chat', {
@@ -98,7 +135,10 @@ export async function sendFeedback({ message_id, useful }) {
 /** GET /api/conversations */
 export async function listConversations() {
   if (USE_MOCK) {
-    return [...MOCK_CONVERSATIONS]
+    await delay(150)
+    return [...MOCK_CONVERSATIONS].sort((a, b) =>
+      (b.updated_at || '').localeCompare(a.updated_at || ''),
+    )
   }
   return request('/api/conversations')
 }
@@ -106,22 +146,15 @@ export async function listConversations() {
 /** GET /api/conversations/{id}/messages */
 export async function listMessages(conversationId) {
   if (USE_MOCK) {
-    return [
-      {
-        role: 'user',
-        content: '订单导出超时怎么办？',
-        created_at: '2026-09-15T14:00:00',
-      },
-      {
-        role: 'assistant',
-        content: '订单导出超时通常是因为一次导出超过 5 万条...',
-        citations: [
-          { document_id: 2, title: '订单导出超时说明', chunk_index: 3 },
-        ],
-        confidence: 'high',
-        message_id: 101,
-      },
-    ]
+    await delay(200)
+    const id = Number(conversationId)
+    const list = MOCK_CONVERSATION_MESSAGES[id] || []
+    return list.map((m) => ({
+      ...m,
+      feedback: null,
+      // 兼容 ChatView 气泡字段
+      content: m.content,
+    }))
   }
   return request(`/api/conversations/${conversationId}/messages`)
 }

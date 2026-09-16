@@ -6,6 +6,28 @@
         <p class="sub">你好，{{ username }}（{{ role }}）</p>
       </div>
       <div class="top-actions">
+        <div class="bell-wrap">
+          <button type="button" class="bell" title="通知" @click="toggleNotif">
+            🔔
+            <span v-if="unreadCount > 0" class="badge">{{ unreadCount }}</span>
+          </button>
+          <div v-if="showNotif" class="notif-panel">
+            <div class="notif-head">通知</div>
+            <div v-if="!notifications.length" class="muted pad">暂无通知</div>
+            <button
+              v-for="n in notifications"
+              :key="n.notification_id"
+              type="button"
+              class="notif-item"
+              :class="{ unread: !n.read }"
+              @click="onOpenNotif(n)"
+            >
+              <div class="notif-q">{{ n.question }}</div>
+              <div class="notif-a">{{ n.answer }}</div>
+              <div class="notif-t">{{ formatTime(n.created_at) }}</div>
+            </button>
+          </div>
+        </div>
         <button v-if="role === 'admin'" class="link" @click="$router.push('/admin/documents')">
           管理后台
         </button>
@@ -15,9 +37,23 @@
 
     <div class="body">
       <aside class="sidebar">
-        <div class="side-title">会话</div>
-        <p class="muted">多轮对话已启用；历史列表 D3 再接</p>
-        <p v-if="conversationId" class="conv-id">当前会话 #{{ conversationId }}</p>
+        <div class="side-head">
+          <div class="side-title">历史会话</div>
+          <button type="button" class="new-chat" @click="onNewChat">新对话</button>
+        </div>
+        <div v-if="convLoading" class="muted pad">加载中...</div>
+        <button
+          v-for="c in conversations"
+          :key="c.conversation_id"
+          type="button"
+          class="conv-item"
+          :class="{ active: conversationId === c.conversation_id }"
+          @click="onSelectConversation(c.conversation_id)"
+        >
+          <div class="conv-title">{{ c.title }}</div>
+          <div class="conv-time">{{ formatTime(c.updated_at) }}</div>
+        </button>
+        <p v-if="!convLoading && !conversations.length" class="muted pad">暂无历史会话</p>
       </aside>
 
       <main class="main">
@@ -96,6 +132,9 @@
               <div class="content thinking-text">正在思考...</div>
             </div>
           </div>
+          <div v-if="historyLoading" class="placeholder">
+            <p class="muted">加载历史消息...</p>
+          </div>
         </div>
 
         <p v-if="error" class="error">{{ error }}</p>
@@ -134,10 +173,11 @@
 </template>
 
 <script setup>
-import { nextTick, ref } from 'vue'
+import { computed, nextTick, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { getUsername, getRole, clearAuth } from '../api/authStorage'
-import { chat, sendFeedback, getCitationChunk } from '../api/chat'
+import { chat, sendFeedback, getCitationChunk, listConversations, listMessages } from '../api/chat'
+import { listNotifications, markNotificationRead } from '../api/notifications'
 
 const router = useRouter()
 const username = getUsername() || ''
@@ -145,11 +185,47 @@ const role = getRole() || ''
 
 const input = ref('')
 const loading = ref(false)
+const historyLoading = ref(false)
 const error = ref('')
 const conversationId = ref(null)
 const messages = ref([])
 const listEl = ref(null)
 const citationDetail = ref(null)
+
+const conversations = ref([])
+const convLoading = ref(false)
+const notifications = ref([])
+const showNotif = ref(false)
+
+const unreadCount = computed(() => notifications.value.filter((n) => !n.read).length)
+
+function formatTime(iso) {
+  if (!iso) return ''
+  return String(iso).replace('T', ' ').slice(0, 16)
+}
+
+async function refreshConversations() {
+  convLoading.value = true
+  try {
+    conversations.value = await listConversations()
+  } catch (e) {
+    error.value = e.detail || e.message || '加载会话失败'
+  } finally {
+    convLoading.value = false
+  }
+}
+
+async function refreshNotifications() {
+  try {
+    notifications.value = await listNotifications()
+  } catch (e) {
+    /* 通知失败不影响主流程 */
+  }
+}
+
+onMounted(async () => {
+  await Promise.all([refreshConversations(), refreshNotifications()])
+})
 
 async function scrollToBottom() {
   await nextTick()
@@ -162,6 +238,38 @@ function onKeydown(e) {
   if (e.key === 'Enter' && !e.shiftKey) {
     e.preventDefault()
     onSend()
+  }
+}
+
+function onNewChat() {
+  conversationId.value = null
+  messages.value = []
+  error.value = ''
+  input.value = ''
+}
+
+async function onSelectConversation(id) {
+  if (loading.value || historyLoading.value) return
+  error.value = ''
+  conversationId.value = id
+  historyLoading.value = true
+  messages.value = []
+  try {
+    const list = await listMessages(id)
+    messages.value = list.map((m) => ({
+      role: m.role,
+      content: m.content,
+      citations: m.citations || [],
+      confidence: m.confidence || null,
+      message_id: m.message_id || null,
+      gap_id: m.gap_id ?? null,
+      feedback: null,
+    }))
+  } catch (e) {
+    error.value = e.detail || e.message || '加载消息失败'
+  } finally {
+    historyLoading.value = false
+    await scrollToBottom()
   }
 }
 
@@ -190,6 +298,7 @@ async function onSend() {
       gap_id: data.gap_id ?? null,
       feedback: null,
     })
+    await refreshConversations()
   } catch (e) {
     error.value = e.detail || e.message || '发送失败'
   } finally {
@@ -210,6 +319,17 @@ async function onFeedback(m, useful) {
 
 function openCitation(c) {
   citationDetail.value = getCitationChunk(c)
+}
+
+function toggleNotif() {
+  showNotif.value = !showNotif.value
+}
+
+async function onOpenNotif(n) {
+  if (!n.read) {
+    await markNotificationRead(n.notification_id)
+    n.read = true
+  }
 }
 
 function onLogout() {
@@ -237,7 +357,7 @@ function onLogout() {
 }
 h1 { margin: 0; font-size: 18px; }
 .sub { margin: 2px 0 0; color: #888; font-size: 12px; }
-.top-actions { display: flex; gap: 8px; }
+.top-actions { display: flex; gap: 8px; align-items: center; }
 .link {
   border: 1px solid #ddd;
   background: #fff;
@@ -246,6 +366,65 @@ h1 { margin: 0; font-size: 18px; }
   cursor: pointer;
   font: inherit;
 }
+.bell-wrap { position: relative; }
+.bell {
+  position: relative;
+  border: 1px solid #ddd;
+  background: #fff;
+  border-radius: 6px;
+  padding: 6px 10px;
+  cursor: pointer;
+  font: inherit;
+  line-height: 1;
+}
+.badge {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: 999px;
+  background: #ea4335;
+  color: #fff;
+  font-size: 11px;
+  line-height: 16px;
+  text-align: center;
+}
+.notif-panel {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 6px);
+  width: 320px;
+  max-height: 360px;
+  overflow: auto;
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+  z-index: 40;
+}
+.notif-head {
+  padding: 10px 12px;
+  font-weight: 600;
+  border-bottom: 1px solid #eee;
+}
+.notif-item {
+  display: block;
+  width: 100%;
+  text-align: left;
+  border: none;
+  border-bottom: 1px solid #f3f4f6;
+  background: #fff;
+  padding: 10px 12px;
+  cursor: pointer;
+  font: inherit;
+}
+.notif-item.unread { background: #f0f7ff; }
+.notif-q { font-weight: 600; font-size: 13px; }
+.notif-a { color: #555; font-size: 12px; margin-top: 4px; }
+.notif-t { color: #999; font-size: 11px; margin-top: 4px; }
+.pad { padding: 8px 0; }
 .body {
   flex: 1;
   display: flex;
@@ -255,15 +434,57 @@ h1 { margin: 0; font-size: 18px; }
   min-height: 0;
 }
 .sidebar {
-  width: 200px;
+  width: 240px;
   flex-shrink: 0;
-  padding: 16px;
+  padding: 12px;
   border-right: 1px solid #e8e8e8;
   background: #fff;
+  overflow: auto;
 }
-.side-title { font-weight: 600; margin-bottom: 8px; }
+.side-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+.side-title { font-weight: 600; }
+.new-chat {
+  border: none;
+  background: #1a73e8;
+  color: #fff;
+  border-radius: 6px;
+  padding: 4px 10px;
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+.conv-item {
+  display: block;
+  width: 100%;
+  text-align: left;
+  border: 1px solid transparent;
+  background: transparent;
+  border-radius: 8px;
+  padding: 8px 10px;
+  margin-bottom: 4px;
+  cursor: pointer;
+  font: inherit;
+}
+.conv-item:hover { background: #f3f4f6; }
+.conv-item.active {
+  background: #e8f0fe;
+  border-color: #c5d8f7;
+}
+.conv-title {
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.conv-time { font-size: 11px; color: #999; margin-top: 2px; }
 .muted { color: #999; font-size: 12px; }
-.conv-id { margin-top: 12px; font-size: 12px; color: #666; }
 .main {
   flex: 1;
   display: flex;
