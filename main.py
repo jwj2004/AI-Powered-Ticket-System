@@ -1,7 +1,7 @@
 """
 知答 - 企业内部知识库智能问答 Agent
 A: 数据与检索（auth/documents/chat/gaps/notifications/dashboard）
-B: 生成与编排（LangGraph，待接入）
+B: 生成与编排（LangGraph + /api/chat）
 C: 前端与工程
 """
 from fastapi import FastAPI
@@ -10,6 +10,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.core.config import settings
 from app.core.logger import log
 from app.api import lookup_retrieve, auth, documents, chat, gaps, notifications, dashboard
+from backend.routers import router as b_router
 
 app = FastAPI(
     title=settings.app_name,
@@ -25,6 +26,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# A 模块路由
 app.include_router(auth.router)
 app.include_router(documents.router)
 app.include_router(chat.router)
@@ -32,6 +34,9 @@ app.include_router(gaps.router)
 app.include_router(notifications.router)
 app.include_router(dashboard.router)
 app.include_router(lookup_retrieve.router)
+
+# B 模块路由（LangGraph 问答编排）
+app.include_router(b_router)
 
 
 @app.get("/api/health")
@@ -47,9 +52,5 @@ async def startup_event():
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(
-        "main:app",
-        host="127.0.0.1",
-        port=8000,
-        reload=settings.debug,
-    )
+
+    uvicorn.run("main:app", host="127.0.0.1", port=8000, reload=True)

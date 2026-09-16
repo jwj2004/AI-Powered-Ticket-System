@@ -1,31 +1,37 @@
-"""硬规则单元测试。"""
+"""路由与硬规则单元测试。"""
 
-from backend.draft import rules
-
-
-def test_judge_confidence_error_code_is_high():
-    assert rules.judge_confidence("PAY_CALLBACK_TIMEOUT", []) == "high"
+from backend.agent import rules
 
 
-def test_judge_confidence_high_score_ticket():
-    tickets = [{"ticket_id": "T1", "score": 0.9}]
-    assert rules.judge_confidence(None, tickets) == "high"
+def test_classify_lookup_when_error_code_present():
+    assert rules.classify_route("PAY_CALLBACK_TIMEOUT 怎么处理") == "lookup"
 
 
-def test_judge_confidence_low_score_is_low():
-    tickets = [{"ticket_id": "T1", "score": 0.2}]
-    assert rules.judge_confidence(None, tickets) == "low"
+def test_classify_refuse_chitchat():
+    assert rules.classify_route("今天天气怎么样，帮我写一首诗") == "refuse"
 
 
-def test_should_refuse_when_empty():
-    assert rules.should_refuse(None, []) is True
+def test_classify_rag_for_export_timeout():
+    assert rules.classify_route("订单导出超时怎么办？") == "rag"
 
 
-def test_low_confidence_response_contract():
-    resp = rules.low_confidence_response("q_20260915_abc123")
-    assert resp["query_id"] == "q_20260915_abc123"
-    assert resp["error_code"] is None
-    assert resp["evidence"] == []
-    assert resp["draft"] is None
-    assert resp["confidence"] == "low"
-    assert resp["message"] == "未找到可靠依据，建议转二线处理"
+def test_chunks_are_strong():
+    assert rules.chunks_are_strong([{"score": 0.9}], high_score_threshold=0.75) is True
+    assert rules.chunks_are_strong([{"score": 0.2}], high_score_threshold=0.75) is False
+    assert rules.chunks_are_strong([]) is False
+
+
+def test_citations_from_chunks():
+    citations = rules.citations_from_chunks(
+        [
+            {
+                "document_id": 1,
+                "title": "订单导出超时排查",
+                "chunk_index": 3,
+                "score": 0.9,
+            }
+        ]
+    )
+    assert citations == [
+        {"document_id": 1, "title": "订单导出超时排查", "chunk_index": 3}
+    ]

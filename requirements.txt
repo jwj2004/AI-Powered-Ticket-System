@@ -9,6 +9,9 @@ langchain==0.2.17
 langchain-community==0.2.16
 langchain-openai==0.1.25
 
+# ===================== B 专属：LangGraph 编排 =====================
+langgraph>=0.2.0,<0.4.0
+
 # ===================== LLM客户端（DeepSeek/Qwen兼容OpenAI接口，全员） =====================
 openai==1.43.0
 
