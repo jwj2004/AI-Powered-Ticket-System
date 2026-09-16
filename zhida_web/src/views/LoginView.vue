@@ -29,14 +29,23 @@
 
 <script setup>
 import { ref } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { login } from '../api/auth'
 
 const router = useRouter()
+const route = useRoute()
 const username = ref('admin')
 const password = ref('123456')
 const loading = ref(false)
 const error = ref('')
+
+function resolveLanding(role) {
+  const redirect = route.query.redirect
+  if (typeof redirect === 'string' && redirect.startsWith('/')) {
+    return redirect
+  }
+  return role === 'admin' ? '/admin/documents' : '/chat'
+}
 
 async function onSubmit() {
   error.value = ''
@@ -47,11 +56,7 @@ async function onSubmit() {
   loading.value = true
   try {
     const data = await login(username.value.trim(), password.value)
-    if (data.role === 'admin') {
-      router.replace('/admin/documents')
-    } else {
-      router.replace('/chat')
-    }
+    router.replace(resolveLanding(data.role))
   } catch (e) {
     error.value = e.detail || e.message || '登录失败'
   } finally {
