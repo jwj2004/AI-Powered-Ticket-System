@@ -1,186 +1,220 @@
-"""封装 A 的 POST /api/retrieve（mock / 真实可切换）。"""
+"""封装 A 的检索 / 错误码直查（mock 与真实可切换）。"""
 
 from __future__ import annotations
 
+import re
 from typing import Any, Optional
 
 import httpx
 
-from backend.config import Settings, get_settings
+from backend.config import get_settings
 
-# 错误码命中时的结构化 solution（质量兜底话术，对齐 error_code.solution）
-_ERROR_CODE_SOLUTIONS: dict[str, str] = {
-    "PAY_CALLBACK_TIMEOUT": (
-        "先在支付商户后台手动查询该笔订单支付状态；"
-        "若已支付，在商城后台对该订单执行「补单/手动确认收款」；"
-        "同时核对当前店铺版本的支付回调地址是否与商户平台配置一致，"
-        "并关注近 24 小时是否有版本升级导致回调路径变更。"
-    ),
-}
-
-# D2 假证据：把「证据→草稿」链路跑通
-_MOCK_TICKETS: list[dict[str, Any]] = [
+# mock 文档块：完整版 RAG 的知识来源（A 的 FAISS 未就绪时用）
+_MOCK_CHUNKS: list[dict[str, Any]] = [
     {
-        "ticket_id": "T20260715001",
-        "solution_text": (
-            "同现象：微信已付款但订单待支付。核实为回调超时，"
-            "商户后台已支付，后台补单后恢复；建议客户核对回调地址。"
+        "document_id": 1,
+        "title": "订单导出超时排查",
+        "chunk_index": 3,
+        "content": (
+            "订单导出超时通常是因为一次导出超过 5 万条。"
+            "建议按周拆分导出，避开高峰时段，并检查导出任务是否已在后台排队。"
         ),
-        "score": 0.87,
+        "score": 0.92,
+        "spaces": ["客服文档", "运维文档"],
+        "keywords": ("导出", "超时", "订单导出", "5万", "五万"),
     },
     {
-        "ticket_id": "T20260721001",
-        "solution_text": (
-            "升级 v3.8.x 后回调路径变更导致通知丢失。"
-            "更正商户平台回调 URL 并补单，问题关闭。"
+        "document_id": 2,
+        "title": "支付回调超时排查手册",
+        "chunk_index": 1,
+        "content": (
+            "PAY_CALLBACK_TIMEOUT：买家已付款但订单仍待支付。"
+            "先在支付商户后台确认该笔是否已扣款；若已支付，在商城执行补单，"
+            "并核对该店铺版本的回调地址是否与商户平台一致。"
         ),
-        "score": 0.81,
+        "score": 0.90,
+        "spaces": ["客服文档"],
+        "keywords": ("支付", "回调", "待支付", "微信", "付款", "PAY_CALLBACK"),
     },
     {
-        "ticket_id": "T20260803012",
-        "solution_text": (
-            "网络抖动导致异步通知丢失。指导客户在支付后台查单，"
-            "商城侧执行手动确认收款，并开启回调重试。"
+        "document_id": 3,
+        "title": "优惠券核销失败",
+        "chunk_index": 0,
+        "content": (
+            "优惠券核销失败常见原因是活动叠加冲突或券已过期。"
+            "先核对券批次状态，关闭冲突促销后再重试核销。"
         ),
-        "score": 0.76,
+        "score": 0.88,
+        "spaces": ["客服文档"],
+        "keywords": ("优惠券", "核销", "券"),
+    },
+    {
+        "document_id": 4,
+        "title": "物流轨迹不更新",
+        "chunk_index": 0,
+        "content": (
+            "物流轨迹推送失败时，先在承运商后台确认已揽收，"
+            "再核对店铺物流订阅开关与回调地址。"
+        ),
+        "score": 0.86,
+        "spaces": ["运维文档"],
+        "keywords": ("物流", "轨迹", "揽收", "运单"),
+    },
+    {
+        "document_id": 5,
+        "title": "新手指南-如何提交工单",
+        "chunk_index": 0,
+        "content": (
+            "新人提交工单时请写清：店铺编号、发生时间、错误现象、是否已重启。"
+            "不要在工单里发送客户手机号等隐私信息。"
+        ),
+        "score": 0.84,
+        "spaces": ["新手指南"],
+        "keywords": ("工单", "新人", "怎么提单", "提交工单", "新手"),
     },
 ]
 
-_MOCK_CUSTOMER_VERSIONS: dict[str, str] = {
-    "C001": "v3.7.2",
-    "C002": "v3.8.0",
-    "C003": "v3.8.5",
-    "C004": "v4.1.0",
+_ERROR_CODE_RE = re.compile(r"\b([A-Z][A-Z0-9_]{5,})\b")
+
+_MOCK_LOOKUP: dict[str, dict[str, Any]] = {
+    "PAY_CALLBACK_TIMEOUT": {
+        "code": "PAY_CALLBACK_TIMEOUT",
+        "name": "支付回调超时",
+        "solution": (
+            "先在支付商户后台手动查询该笔订单支付状态；"
+            "若已支付，在商城后台对该订单执行补单/手动确认收款；"
+            "同时核对当前店铺版本的支付回调地址是否与商户平台配置一致。"
+        ),
+    }
+}
+
+_ROLE_SPACES = {
+    "admin": {"客服文档", "运维文档", "新手指南"},
+    "ops": {"客服文档", "运维文档"},
+    "newbie": {"新手指南"},
 }
 
 
-def _summarize_one_line(solution_text: str, max_len: int = 80) -> str:
-    text = " ".join(solution_text.strip().split())
-    if len(text) <= max_len:
-        return text
-    return text[: max_len - 1] + "…"
+def extract_error_code(text: str) -> Optional[str]:
+    match = _ERROR_CODE_RE.search(text or "")
+    return match.group(1) if match else None
+
+
+def spaces_for_role(role: str) -> set[str]:
+    return _ROLE_SPACES.get(role, _ROLE_SPACES["ops"])
 
 
 class RetrieveClient:
-    """只暴露 retrieve()，内部按配置走 mock 或真实 HTTP。"""
+    """文档块 top5 + 错误码 lookup。"""
 
-    def __init__(self, settings: Optional[Settings] = None) -> None:
+    def __init__(self, settings=None) -> None:
         self.settings = settings or get_settings()
 
-    def retrieve(
-        self,
-        query: str,
-        customer_id: Optional[str] = None,
-        top_k: int = 3,
-    ) -> dict[str, Any]:
-        if self.settings.use_mock_retrieve:
-            return self._mock_retrieve(query, customer_id, top_k)
-        return self._http_retrieve(query, customer_id, top_k)
-
-    def get_customer_version(self, customer_id: Optional[str]) -> Optional[str]:
-        """客户版本号（D3 可改为调 A 的 context 接口）。"""
-        if not customer_id:
+    def lookup(self, code: str) -> Optional[dict[str, Any]]:
+        if not code:
             return None
         if self.settings.use_mock_retrieve:
-            return _MOCK_CUSTOMER_VERSIONS.get(customer_id)
-        url = f"{self.settings.retrieve_base_url.rstrip('/')}/api/tickets/{customer_id}/context"
-        try:
-            with httpx.Client(timeout=self.settings.retrieve_timeout_seconds) as client:
-                resp = client.get(url)
-                if resp.status_code != 200:
-                    return None
-                data = resp.json()
-                version = data.get("version")
-                return version if version else None
-        except httpx.HTTPError:
-            return None
-
-    def get_error_code_solution(self, error_code: Optional[str]) -> Optional[str]:
-        """错误码命中时的结构化 solution（mock 内置；真实模式接 /api/lookup）。"""
-        if not error_code:
-            return None
-        if self.settings.use_mock_retrieve:
-            return _ERROR_CODE_SOLUTIONS.get(error_code)
+            data = _MOCK_LOOKUP.get(code)
+            return dict(data) if data else None
         url = f"{self.settings.retrieve_base_url.rstrip('/')}/api/lookup"
         try:
             with httpx.Client(timeout=self.settings.retrieve_timeout_seconds) as client:
-                resp = client.get(url, params={"code": error_code})
+                resp = client.get(url, params={"code": code})
                 if resp.status_code != 200:
                     return None
                 data = resp.json()
-                if data.get("code") == "NOT_EXIST":
+                if data.get("code") in {None, "", "NOT_EXIST"}:
                     return None
-                solution = data.get("solution") or None
-                return solution if solution else None
+                return {
+                    "code": data.get("code"),
+                    "name": data.get("name") or "",
+                    "solution": data.get("solution") or "",
+                }
         except httpx.HTTPError:
             return None
 
-    def _mock_retrieve(
+    def retrieve_chunks(
         self,
         query: str,
-        customer_id: Optional[str],
-        top_k: int,
-    ) -> dict[str, Any]:
-        """关键词触发假证据；无关问题返回空，用于验证「无引用不输出」。"""
-        _ = customer_id
-        keywords = ("付", "支付", "微信", "订单", "待支付", "回调", "PAY")
-        if not any(k in query for k in keywords):
-            return {"error_code": None, "tickets": []}
+        *,
+        role: str = "ops",
+        top_k: int = 5,
+    ) -> list[dict[str, Any]]:
+        if self.settings.use_mock_retrieve:
+            return self._mock_chunks(query, role=role, top_k=top_k)
+        return self._http_chunks(query, role=role, top_k=top_k)
 
-        tickets = []
-        for item in _MOCK_TICKETS[: max(1, min(top_k, 3))]:
-            tickets.append(
+    def reindex_document(self, document_id: int) -> bool:
+        """管理员补文档后通知 A 重新向量化；A 未就绪时静默跳过。"""
+        if self.settings.use_mock_retrieve:
+            return True
+        url = f"{self.settings.retrieve_base_url.rstrip('/')}/api/documents/{document_id}/reindex"
+        try:
+            with httpx.Client(timeout=self.settings.retrieve_timeout_seconds) as client:
+                resp = client.post(url)
+                return resp.status_code == 200
+        except httpx.HTTPError:
+            return False
+
+    def _mock_chunks(self, query: str, *, role: str, top_k: int) -> list[dict[str, Any]]:
+        allowed = spaces_for_role(role)
+        scored: list[dict[str, Any]] = []
+        q = query or ""
+        for item in _MOCK_CHUNKS:
+            if not set(item["spaces"]) & allowed:
+                continue
+            hits = sum(1 for kw in item["keywords"] if kw.lower() in q.lower())
+            if hits <= 0:
+                continue
+            score = min(0.99, float(item["score"]) + 0.01 * hits)
+            scored.append(
                 {
-                    "ticket_id": item["ticket_id"],
-                    "solution_text": item["solution_text"],
-                    "score": item["score"],
-                    "summary": _summarize_one_line(item["solution_text"]),
+                    "document_id": item["document_id"],
+                    "title": item["title"],
+                    "chunk_index": item["chunk_index"],
+                    "content": item["content"],
+                    "score": round(score, 4),
                 }
             )
-        return {
-            "error_code": "PAY_CALLBACK_TIMEOUT",
-            "tickets": tickets,
-        }
+        scored.sort(key=lambda x: x["score"], reverse=True)
+        return scored[: max(1, min(top_k, 5))] if scored else []
 
-    def _http_retrieve(
-        self,
-        query: str,
-        customer_id: Optional[str],
-        top_k: int,
-    ) -> dict[str, Any]:
+    def _http_chunks(self, query: str, *, role: str, top_k: int) -> list[dict[str, Any]]:
         url = f"{self.settings.retrieve_base_url.rstrip('/')}/api/retrieve"
-        payload = {
-            "query": query,
-            "customer_id": customer_id,
-            "top_k": top_k,
-        }
-        with httpx.Client(timeout=self.settings.retrieve_timeout_seconds) as client:
-            resp = client.post(url, json=payload)
-            resp.raise_for_status()
-            data = resp.json()
+        payload = {"query": query, "top_k": top_k, "role": role}
+        try:
+            with httpx.Client(timeout=self.settings.retrieve_timeout_seconds) as client:
+                resp = client.post(url, json=payload)
+                resp.raise_for_status()
+                data = resp.json()
+        except httpx.HTTPError:
+            return []
 
-        tickets = []
-        for item in (data.get("tickets") or [])[:3]:
-            solution_text = item.get("solution_text") or ""
-            tickets.append(
+        if data.get("chunks"):
+            chunks = []
+            for item in data["chunks"][:5]:
+                chunks.append(
+                    {
+                        "document_id": item.get("document_id"),
+                        "title": item.get("title") or "",
+                        "chunk_index": int(item.get("chunk_index") or 0),
+                        "content": item.get("content") or item.get("text") or "",
+                        "score": float(item.get("score") or 0.0),
+                    }
+                )
+            return chunks
+
+        # 兼容工单副驾旧 retrieve：tickets → 临时当成文档块
+        tickets = data.get("tickets") or []
+        chunks = []
+        for idx, item in enumerate(tickets[:5]):
+            chunks.append(
                 {
-                    "ticket_id": item.get("ticket_id"),
-                    "solution_text": solution_text,
+                    "document_id": idx + 1,
+                    "title": item.get("ticket_id") or f"ticket-{idx}",
+                    "chunk_index": 0,
+                    "content": item.get("solution_text") or "",
                     "score": float(item.get("score") or 0.0),
-                    "summary": _summarize_one_line(solution_text),
                 }
             )
-        error_code = data.get("error_code")
-        return {
-            "error_code": error_code if error_code else None,
-            "tickets": tickets,
-        }
-
-
-def retrieve(
-    query: str,
-    customer_id: Optional[str] = None,
-    top_k: int = 3,
-) -> dict[str, Any]:
-    """模块级便捷入口，供 service 直接调用。"""
-    return RetrieveClient().retrieve(query, customer_id, top_k)
+        return chunks
