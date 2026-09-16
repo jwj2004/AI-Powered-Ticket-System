@@ -191,3 +191,49 @@ def test_feedback_and_gap_resolve_notifies_user(client: TestClient):
     nid = notes.json()[0]["notification_id"]
     read = client.post(f"/api/notifications/{nid}/read", headers=_auth(ops_token))
     assert read.json() == {"ok": True}
+
+
+def test_chat_contract_field_is_message(client: TestClient):
+    token = _login(client)
+    resp = client.post(
+        "/api/chat",
+        json={"message": "订单导出超时怎么办？", "conversation_id": None},
+        headers=_auth(token),
+    )
+    assert resp.status_code == 200
+    assert "reply" in resp.json()
+
+
+def test_chat_accepts_legacy_query_alias(client: TestClient):
+    """联调前部分调用方曾传 query；契约字段是 message，两者都要能进。"""
+    token = _login(client)
+    resp = client.post(
+        "/api/chat",
+        json={"query": "订单导出超时怎么办？", "conversation_id": None},
+        headers=_auth(token),
+    )
+    assert resp.status_code == 200
+    assert resp.json()["confidence"] == "high"
+
+
+def test_accepts_token_payload_shape_from_a(client: TestClient):
+    """A 签发的 token 只有 sub/username/role，没有 user_id。"""
+    import jwt
+    from datetime import datetime, timedelta, timezone
+
+    from backend.config import get_settings
+
+    settings = get_settings()
+    token = jwt.encode(
+        {
+            "sub": "2",
+            "username": "ops",
+            "role": "ops",
+            "exp": datetime.now(timezone.utc) + timedelta(hours=24),
+            "iat": datetime.now(timezone.utc),
+        },
+        settings.jwt_secret,
+        algorithm="HS256",
+    )
+    resp = client.get("/api/conversations", headers=_auth(token))
+    assert resp.status_code == 200
