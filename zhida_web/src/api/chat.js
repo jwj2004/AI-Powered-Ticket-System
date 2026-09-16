@@ -1,8 +1,12 @@
 import { USE_MOCK, request } from './http'
-import { MOCK_CONVERSATIONS } from './mock/data'
+import { MOCK_CONVERSATIONS, MOCK_CITATION_CHUNKS } from './mock/data'
 
 let mockConversationId = 1
 let mockMessageId = 100
+
+function delay(ms = 600) {
+  return new Promise((resolve) => setTimeout(resolve, ms))
+}
 
 /**
  * POST /api/chat
@@ -10,9 +14,14 @@ let mockMessageId = 100
  */
 export async function chat({ message, conversation_id = null }) {
   if (USE_MOCK) {
+    await delay(700)
     const cid = conversation_id ?? ++mockConversationId
     const mid = ++mockMessageId
-    const low = message.includes('没有答案') || message.includes('不知道')
+    const text = message.trim()
+    const low =
+      text.includes('没有答案') ||
+      text.includes('不知道') ||
+      text.includes('随便问问')
 
     if (low) {
       return {
@@ -25,9 +34,24 @@ export async function chat({ message, conversation_id = null }) {
       }
     }
 
+    if (text.includes('支付') || text.includes('回调')) {
+      return {
+        conversation_id: cid,
+        reply:
+          '支付回调超时一般是商户平台未及时通知商城。建议：1）在支付后台确认是否已扣款；2）核对回调地址是否与当前版本一致；3）升级后注意 v4.2 的新回调路径。',
+        citations: [
+          { document_id: 1, title: '支付回调超时排查手册', chunk_index: 1 },
+          { document_id: 1, title: '支付回调超时排查手册', chunk_index: 2 },
+        ],
+        confidence: 'high',
+        message_id: mid,
+      }
+    }
+
     return {
       conversation_id: cid,
-      reply: '订单导出超时通常是因为一次导出超过 5 万条。建议按周拆分导出，并检查导出任务队列是否堵塞。',
+      reply:
+        '订单导出超时通常是因为一次导出超过 5 万条。建议按周拆分导出，并检查导出任务队列是否堵塞。如需追问，可继续说明你们的导出条数和版本。',
       citations: [
         { document_id: 2, title: '订单导出超时说明', chunk_index: 3 },
       ],
@@ -45,9 +69,24 @@ export async function chat({ message, conversation_id = null }) {
   })
 }
 
+/** 点击引用时取 chunk 详情（mock） */
+export function getCitationChunk(citation) {
+  if (!citation) return null
+  const key = `${citation.document_id}:${citation.chunk_index}`
+  return (
+    MOCK_CITATION_CHUNKS[key] || {
+      document_id: citation.document_id,
+      title: citation.title,
+      chunk_index: citation.chunk_index,
+      content: '（mock）暂无该片段正文，接真后端后从文档块接口读取。',
+    }
+  )
+}
+
 /** POST /api/feedback 新契约：{ message_id, useful } */
 export async function sendFeedback({ message_id, useful }) {
   if (USE_MOCK) {
+    await delay(200)
     return { ok: true }
   }
   return request('/api/feedback', {

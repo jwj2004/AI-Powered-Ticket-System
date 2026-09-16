@@ -84,3 +84,28 @@ export const MOCK_CONVERSATIONS = [
     updated_at: '2026-09-15T14:00:00',
   },
 ]
+
+/** 可点击引用时展示的 chunk 片段（D2 mock） */
+export const MOCK_CITATION_CHUNKS = {
+  '2:3': {
+    document_id: 2,
+    title: '订单导出超时说明',
+    chunk_index: 3,
+    content:
+      '一次导出建议不超过 5 万条。超过阈值会触发任务超时。可按周拆分导出，或在后台「导出任务」查看队列状态。',
+  },
+  '1:1': {
+    document_id: 1,
+    title: '支付回调超时排查手册',
+    chunk_index: 1,
+    content:
+      '买家已付款但订单长时间未变成已支付时，先在支付商户后台确认扣款，再核对商城回调地址是否与商户平台一致。',
+  },
+  '1:2': {
+    document_id: 1,
+    title: '支付回调超时排查手册',
+    chunk_index: 2,
+    content:
+      '店铺升级到 v4.2 后，回调路径变更为 /api/v2/pay/notify，需在商户平台同步更新。',
+  },
+}
