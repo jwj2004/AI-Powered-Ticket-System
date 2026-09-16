@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session
 from typing import Optional
 
 from app.core.database import get_db
-from app.core.deps import get_current_user, require_admin
+from app.core.deps import require_admin
 from app.models.user import User
 from app.models.knowledge_gap import KnowledgeGap
 from app.models.notification import Notification
@@ -12,44 +12,32 @@ from app.models.notification import Notification
 router = APIRouter(prefix="/api/gaps", tags=["知识缺口"])
 
 
-class GapItem(BaseModel):
-    id: int
-    question: str
-    status: str
-    answer: Optional[str] = None
-    created_at: str
-
-
-class GapListResponse(BaseModel):
-    total: int
-    items: list[GapItem]
-
-
 class ResolveRequest(BaseModel):
     answer: str
+    document_id: Optional[int] = None
 
 
-@router.get("", response_model=GapListResponse)
+@router.get("")
 def list_gaps(
     status: Optional[str] = None,
     db: Session = Depends(get_db),
     user: User = Depends(require_admin),
 ):
-    q = db.query(KnowledgeGap)
+    q = db.query(KnowledgeGap, User).join(User, KnowledgeGap.user_id == User.id)
     if status:
         q = q.filter(KnowledgeGap.status == status)
-    gaps = q.order_by(KnowledgeGap.created_at.desc()).all()
-    return {
-        "total": len(gaps),
-        "items": [
-            GapItem(
-                id=g.id, question=g.question, status=g.status,
-                answer=g.answer,
-                created_at=g.created_at.isoformat() if g.created_at else "",
-            )
-            for g in gaps
-        ],
-    }
+    rows = q.order_by(KnowledgeGap.created_at.desc()).all()
+    return [
+        {
+            "gap_id": g.id,
+            "question": g.question,
+            "user_id": g.user_id,
+            "username": u.username,
+            "status": g.status,
+            "created_at": g.created_at.isoformat() if g.created_at else "",
+        }
+        for g, u in rows
+    ]
 
 
 @router.post("/{gap_id}/resolve")
@@ -76,4 +64,4 @@ def resolve_gap(
     )
     db.add(notification)
     db.commit()
-    return {"ok": True}
+    return {"ok": True, "notified_user_id": gap.user_id}

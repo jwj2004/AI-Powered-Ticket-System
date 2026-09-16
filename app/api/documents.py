@@ -10,7 +10,7 @@ from app.core.database import get_db
 from app.core.deps import get_current_user, require_admin
 from app.models.user import User
 from app.models.document import Document
-from app.models.document_chunk import DocumentChunk
+from app.models.doc_space import DocSpace
 from app.models.doc_version import DocVersion
 from app.services.document_service import (
     parse_file,
@@ -22,53 +22,64 @@ from app.services.document_service import (
 router = APIRouter(prefix="/api/documents", tags=["文档管理"])
 
 
-class DocumentResponse(BaseModel):
-    id: int
-    space_id: int
-    title: str
-    content_type: str
-    version: int
-    owner_id: Optional[int] = None
-
-
-class DocumentListResponse(BaseModel):
-    total: int
-    items: list[DocumentResponse]
-
-
 class UpdateRequest(BaseModel):
+    title: Optional[str] = None
     content: str
+    space_id: Optional[int] = None
 
 
 class VersionResponse(BaseModel):
-    id: int
     version: int
     created_at: str
 
 
-@router.get("", response_model=DocumentListResponse)
+@router.get("")
 def list_documents(
     space_id: Optional[int] = None,
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
-    q = db.query(Document)
+    q = db.query(Document, DocSpace).join(DocSpace, Document.space_id == DocSpace.id)
     if space_id:
         q = q.filter(Document.space_id == space_id)
-    docs = q.order_by(Document.updated_at.desc()).all()
+    rows = q.order_by(Document.updated_at.desc()).all()
+    result = []
+    for doc, space in rows:
+        owner_name = ""
+        if doc.owner_id:
+            owner = db.query(User).filter(User.id == doc.owner_id).first()
+            if owner:
+                owner_name = owner.username
+        result.append({
+            "id": doc.id,
+            "title": doc.title,
+            "space": space.name,
+            "version": doc.version,
+            "updated_at": doc.updated_at.isoformat() if doc.updated_at else "",
+            "owner": owner_name,
+        })
+    return result
+
+
+@router.get("/{doc_id}")
+def get_document(
+    doc_id: int,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    doc = db.query(Document).filter(Document.id == doc_id).first()
+    if not doc:
+        raise HTTPException(status_code=404, detail="文档不存在")
     return {
-        "total": len(docs),
-        "items": [
-            DocumentResponse(
-                id=d.id, space_id=d.space_id, title=d.title,
-                content_type=d.content_type, version=d.version, owner_id=d.owner_id,
-            )
-            for d in docs
-        ],
+        "id": doc.id,
+        "title": doc.title,
+        "content": doc.content or "",
+        "space_id": doc.space_id,
+        "version": doc.version,
     }
 
 
-@router.post("/upload", response_model=DocumentResponse)
+@router.post("/upload")
 async def upload_document(
     file: UploadFile = File(...),
     space_id: int = Form(...),
@@ -95,10 +106,8 @@ async def upload_document(
         db, space_id=space_id, title=file.filename,
         content=text, content_type=ext, owner_id=user.id,
     )
-    return DocumentResponse(
-        id=doc.id, space_id=doc.space_id, title=doc.title,
-        content_type=doc.content_type, version=doc.version, owner_id=doc.owner_id,
-    )
+    chunk_count = db.query(Document).filter(Document.id == doc.id).first()
+    return {"id": doc.id, "title": doc.title, "chunks": chunk_count.version if chunk_count else 0}
 
 
 @router.put("/{doc_id}")
@@ -110,7 +119,7 @@ def edit_document(
 ):
     try:
         doc = update_document(db, doc_id, req.content)
-        return {"id": doc.id, "version": doc.version, "message": "更新成功"}
+        return {"id": doc.id, "version": doc.version}
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
 
@@ -138,6 +147,6 @@ def list_versions(
         .all()
     )
     return [
-        VersionResponse(id=v.id, version=v.version, created_at=v.created_at.isoformat() if v.created_at else "")
+        VersionResponse(version=v.version, created_at=v.created_at.isoformat() if v.created_at else "")
         for v in versions
     ]

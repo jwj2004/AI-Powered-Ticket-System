@@ -23,7 +23,7 @@ class Settings(BaseSettings):
     llm_model: str = "deepseek-chat"
 
     # JWT 认证
-    jwt_secret: str = "zhida-secret-key-change-in-production"
+    jwt_secret: str = "zhida-jwt-shared-2026"
     jwt_expire_hours: int = 24
     jwt_algorithm: str = "HS256"
 

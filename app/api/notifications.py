@@ -22,21 +22,17 @@ def list_notifications(
         .order_by(Notification.created_at.desc())
         .all()
     )
-    return {
-        "total": len(notifs),
-        "unread": sum(1 for n, _ in notifs if not n.read),
-        "items": [
-            {
-                "id": n.id,
-                "gap_id": g.id,
-                "question": g.question,
-                "answer": g.answer,
-                "read": n.read,
-                "created_at": n.created_at.isoformat() if n.created_at else "",
-            }
-            for n, g in notifs
-        ],
-    }
+    return [
+        {
+            "notification_id": n.id,
+            "gap_id": g.id,
+            "question": g.question,
+            "answer": g.answer,
+            "read": n.read,
+            "created_at": n.created_at.isoformat() if n.created_at else "",
+        }
+        for n, g in notifs
+    ]
 
 
 @router.post("/{notif_id}/read")
