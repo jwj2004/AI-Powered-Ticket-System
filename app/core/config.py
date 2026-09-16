@@ -9,7 +9,7 @@ class Settings(BaseSettings):
     database_url: str = "sqlite:///./db/zhida.db"
 
     # 向量检索
-    embedding_model: str = "shibing624/text2vec-base-chinese"
+    embedding_model: str = "BAAI/bge-small-zh-v1.5"
     faiss_index_path: str = "./db/ticket_index.faiss"
     faiss_mapping_path: str = "./db/ticket_id_mapping.json"
 
@@ -17,10 +17,18 @@ class Settings(BaseSettings):
     app_name: str = "知答 MVP - 数据检索服务"
     debug: bool = True
 
-    # LLM 配置（A 不需要直接调，留空占位，对齐团队结构）
+    # LLM 配置（B 调用，A 留空对齐结构）
     openai_api_key: str = ""
     openai_base_url: str = ""
     llm_model: str = "deepseek-chat"
+
+    # JWT 认证
+    jwt_secret: str = "zhida-secret-key-change-in-production"
+    jwt_expire_hours: int = 24
+    jwt_algorithm: str = "HS256"
+
+    # 文档上传临时目录
+    upload_dir: str = "./data/uploads"
 
     class Config:
         env_file = ".env"
