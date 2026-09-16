@@ -1,57 +1,57 @@
-# 知答 MVP · Cursor 项目规则
+# 知答 · Cursor 项目规则（企业知识库问答 Agent）
 
 ## 项目是什么
-「知答」是一个 SaaS 售后工单智能副驾的 MVP。一线客服在网页上打开一个页面，粘贴客户问题，系统返回错误码释义、相似历史工单、可复制的答复草稿。
+「知答」是企业内部知识库智能问答系统。员工登录后自由提问，系统从内部文档检索证据、带引用回答；管理员管文档、看缺口和看板。核心原则：宁可不答，不可错答。
+
+旧工单副驾能力保留为「结构化直查」（`/api/lookup`），`App.vue` 旧页 D1 不删、暂不迁路由。
 
 ## 你现在是谁
-你在帮我（小组里负责 C 板块）写代码。我的职责是：FastAPI 工程骨架、Vue 前端页面、接口契约、埋点上报、部署。
-**不要替 A（数据检索）和 B（草稿生成）写业务逻辑**——他们有自己的分工。你只写骨架、mock 接口、前端页面，以及把 A/B 的实现接进来。
+你在帮我（C 板块）写代码：Vue 前端、工程骨架、部署说明、接口 mock 联调。
+**不要替 A（数据与检索）和 B（生成与编排）写业务逻辑**——只接他们的接口 / 写前端 mock。
 
 ## 技术栈（不要随便换）
-- 后端：Python 3.10 + FastAPI + Uvicorn + Pydantic v2
-- 数据库：SQLite（MVP 阶段不要上 MySQL/PostgreSQL）
-- 前端：Vue 3 + Vite，单页面，JS（不上 TS）
-- 前端不引入：Vue Router、Pinia、Element Plus/Ant Design 等 UI 库、axios（用原生 fetch）
+- 后端：Python 3.10 + FastAPI + Uvicorn + Pydantic v2 + SQLite
+- 前端：Vue 3 + Vite，JS（不上 TS）
+- 前端可用：Vue Router（已放开）
+- 前端不用：Pinia、Element Plus / Ant Design、axios（用原生 fetch）
+- token / role：存 `localStorage`，不上 Pinia
 - HTTP：同步 JSON，不要 SSE/WebSocket
-- LLM 调用：B 负责，你不要写调用 LLM 的代码
+- LLM / LangGraph / FAISS：A/B 负责，你不要写
 
 ## 接口契约硬约束（改了就是事故）
-- 后端 Base URL：`http://127.0.0.1:8000`
-- 前端 Vite dev server：`http://127.0.0.1:5173`
-- 字段全部 snake_case
-- 空值用 JSON `null`，不要用空字符串 `""`
-- 错误统一返回 `{"detail": "..."}`，HTTP 4xx/5xx，不要在 200 里塞 error 字段
-- `confidence` 只有 `"high"` / `"low"` 两个值
-- 三个核心接口：
-  - `GET /api/lookup?code=XXX`
-  - `POST /api/draft`，body `{raw_text, customer_id}`，response 必须含 `query_id`
-  - `POST /api/feedback`，body `{query_id, copied, thumbs_down}`
-- 内部接口 `POST /api/retrieve` 是 B 调 A 的，前端不直接调
+- 权威文档：`docs/接口契约.md`（v2）、`docs/知答-完整版-开发文档.md`
+- Base URL：`http://127.0.0.1:8000`
+- Vite：`http://127.0.0.1:5173`
+- 除 `/api/auth/login` 外，请求头带 `Authorization: Bearer <token>`
+- 字段全部 snake_case；空值用 JSON `null`
+- 错误统一 `{"detail": "..."}` + 4xx/5xx
+- `confidence` 只有 `"high"` / `"low"`
+- 角色：`admin` / `ops` / `newbie`
+- 前端问答走 `POST /api/chat`，**不再调** `/api/draft`（draft 留给 B）
+- `GET /api/lookup` 保留（结构化直查）
+- `POST /api/feedback` 新契约：`{ message_id, useful }`
 
-## 当前文件
-- `main.py`：FastAPI 入口，含三个 mock 接口和 CORS
-- `src/App.vue`：Vue 前端主页面（输入框 + 三块结果 + 复制按钮）
-- `seed_*.csv`：模拟数据（A 负责灌库，你别动）
-- `接口契约.md`：接口字段定义，改字段前必须读它
+## 当前前端结构（C）
+- `zhida_web/src/router/`：路由 + 守卫
+- `zhida_web/src/views/`：登录、问答、管理后台
+- `zhida_web/src/api/`：接口层（D1 mock，后续接真后端）
+- `zhida_web/src/App.vue`：旧工单副驾页（暂不挂路由，勿删）
 
 ## 代码风格
 - 注释用中文
-- 函数短小，一个函数做一件事
-- mock 接口返回的数据要和接口契约完全一致，包括字段名和空值处理
-- 不要加额外的抽象层、设计模式、配置文件——这是 5 天 MVP，越简单越好
-- 不要引入新依赖。需要新包先问我
-- Vue 组件用 `<script setup>` 语法，不要用 Options API
+- 函数短小，一件事一个函数
+- mock 返回必须与接口契约字段一致
+- Vue 用 `<script setup>`，不要 Options API
+- 不要加多余抽象；需要新 npm/Python 包先问我
 
 ## 不要做的事
-- 不要上 MySQL/PostgreSQL/Redis
-- 不要引入 LangGraph/LangChain/FAISS/BGE（那是 A/B 的活）
-- 不要上 Vue Router/Pinia/UI 库/axios
-- 不要改接口字段名。要改加新字段，不要动现有字段
-- 不要加用户登录、权限、审计功能（MVP 不做）
-- 不要加测试框架——先把功能跑通
+- 不要上 MySQL/PostgreSQL/Redis（MVP 用 SQLite）
+- 不要替 A/B 写 JWT、文档解析、LangGraph、FAISS 业务
+- 不要改接口字段名；要加字段走契约评审
+- 不要删除 `backend/draft/` 或旧 `App.vue`
 - 不要回到油猴脚本方案
 
 ## 我让你做什么时
-- 先读 `main.py` 和 `src/App.vue` 理解现状
+- 先读 `docs/接口契约.md` 和相关现有文件
 - 改完告诉我改了哪个文件、为什么
-- 如果我的需求和接口契约冲突，提醒我，不要默默改契约
+- 需求和契约冲突时提醒我，不要默默改契约
