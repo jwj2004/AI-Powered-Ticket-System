@@ -68,7 +68,7 @@ export const MOCK_DOCUMENT_DETAILS = {
   },
 }
 
-export const MOCK_GAPS = [
+export let MOCK_GAPS = [
   {
     gap_id: 5,
     question: '订单导出超时怎么办？',
@@ -76,6 +76,30 @@ export const MOCK_GAPS = [
     username: 'lisi',
     status: 'pending',
     created_at: '2026-09-15T14:00:00',
+  },
+  {
+    gap_id: 6,
+    question: '短信通道怎么换？',
+    user_id: 2,
+    username: 'zhangsan',
+    status: 'pending',
+    created_at: '2026-09-15T16:20:00',
+  },
+  {
+    gap_id: 7,
+    question: '如何开通 API？',
+    user_id: 3,
+    username: 'lisi',
+    status: 'pending',
+    created_at: '2026-09-16T08:10:00',
+  },
+  {
+    gap_id: 8,
+    question: '新人怎么申请系统权限？',
+    user_id: 3,
+    username: 'lisi',
+    status: 'resolved',
+    created_at: '2026-09-13T09:05:00',
   },
 ]
 
@@ -115,11 +139,12 @@ export const MOCK_DASHBOARD = {
   pending_gaps: 5,
 }
 
-export const MOCK_FAQ = [
+export let MOCK_FAQ = [
   {
     id: 1,
     question: '订单导出超时怎么办？',
     answer: '一次导出不要超过 5 万条，可按周拆分。',
+    gap_id: null,
   },
 ]
 

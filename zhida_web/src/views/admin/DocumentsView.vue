@@ -3,7 +3,7 @@
     <div class="toolbar">
       <div>
         <h2>文档管理</h2>
-        <p class="muted">列表 / 上传 / 编辑（textarea）/ 删除 · mock</p>
+        <p class="muted">列表 / 上传 / 富文本编辑 / 删除 · mock</p>
       </div>
       <button type="button" class="btn" @click="openUpload">上传文档</button>
     </div>
@@ -60,8 +60,8 @@
       </div>
     </div>
 
-    <!-- 编辑弹窗：D4 再换富文本，先用 textarea -->
-    <div v-if="showEdit" class="modal-mask" @click.self="showEdit = false">
+    <!-- 编辑弹窗：WangEditor 富文本，保存提交 HTML -->
+    <div v-if="showEdit" class="modal-mask" @click.self="closeEdit">
       <div class="modal wide">
         <h3>编辑文档</h3>
         <label class="label">标题</label>
@@ -71,10 +71,10 @@
           <option v-for="s in spaces" :key="s.id" :value="s.id">{{ s.name }}</option>
         </select>
         <label class="label">内容</label>
-        <textarea v-model="editForm.content" class="textarea" rows="10"></textarea>
+        <RichTextEditor v-model="editForm.content" placeholder="请输入文档内容..." />
         <p v-if="editError" class="error">{{ editError }}</p>
         <div class="modal-actions">
-          <button type="button" class="link-btn" @click="showEdit = false">取消</button>
+          <button type="button" class="link-btn" @click="closeEdit">取消</button>
           <button type="button" class="btn" :disabled="saving" @click="submitEdit">
             {{ saving ? '保存中...' : '保存' }}
           </button>
@@ -94,6 +94,7 @@ import {
   deleteDocument,
 } from '../../api/documents'
 import { listDocSpaces } from '../../api/auth'
+import RichTextEditor from '../../components/RichTextEditor.vue'
 
 const docs = ref([])
 const spaces = ref([])
@@ -119,6 +120,16 @@ const editForm = reactive({
 function formatTime(iso) {
   if (!iso) return ''
   return String(iso).replace('T', ' ').slice(0, 16)
+}
+
+/** 纯文本转简单 HTML，便于编辑器展示 */
+function toEditorHtml(content) {
+  if (!content) return '<p></p>'
+  if (/<[a-z][\s\S]*>/i.test(content)) return content
+  return content
+    .split(/\n+/)
+    .map((line) => `<p>${line}</p>`)
+    .join('')
 }
 
 async function refresh() {
@@ -179,12 +190,16 @@ async function openEdit(d) {
     const detail = await getDocument(d.id)
     editForm.id = detail.id
     editForm.title = detail.title
-    editForm.content = detail.content
+    editForm.content = toEditorHtml(detail.content)
     editForm.space_id = detail.space_id
     showEdit.value = true
   } catch (e) {
     error.value = e.detail || e.message || '加载文档详情失败'
   }
+}
+
+function closeEdit() {
+  showEdit.value = false
 }
 
 async function submitEdit() {
@@ -197,7 +212,7 @@ async function submitEdit() {
   try {
     await updateDocument(editForm.id, {
       title: editForm.title.trim(),
-      content: editForm.content,
+      content: editForm.content, // HTML
       space_id: editForm.space_id,
     })
     showEdit.value = false
