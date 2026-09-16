@@ -177,7 +177,12 @@ async function generate() {
         customer_id: customerId.value || null,
       }),
     })
-    result.value = await resp.json()
+    const data = await resp.json().catch(() => ({}))
+    if (!resp.ok) {
+      errorMsg.value = data.detail || `生成失败（${resp.status}）`
+      return
+    }
+    result.value = data
   } catch (err) {
     errorMsg.value = '后端连接失败，请确认 FastAPI 已启动在 8000 端口'
   } finally {

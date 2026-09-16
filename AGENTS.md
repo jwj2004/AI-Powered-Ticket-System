@@ -1,7 +1,7 @@
 # 「知答」B 模块 · Cursor 协作说明（完整版）
 
-> 配套文档：《知答-完整版-开发文档》《接口契约(1).md》。
-> 项目已从工单副驾改为企业知识库问答 Agent。B 负责生成与编排，不改 A/C 目录。
+> 配套文档：《知答-完整版-开发文档》《接口契约.md》。
+> 项目方向：企业知识库问答 Agent。B 负责生成与编排，不改 A/C 目录。
 
 ## 一、我的角色（B · 生成与编排）
 
@@ -19,6 +19,7 @@
 - 向量检索在 A；`USE_MOCK_RETRIEVE=true` 时 B 用内置文档块
 - 全部同步 JSON；除 `/api/auth/login` 与 `/api/health` 外需要 `Authorization: Bearer <token>`
 - `confidence` 只有 `high` / `low`；空值用 `null`
+- 角色：`admin` / `ops` / `newbie`
 
 ## 三、B 对外接口（契约 v2）
 

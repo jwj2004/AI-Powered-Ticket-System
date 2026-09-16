@@ -1,27 +1,59 @@
-# 知答 B 模块 · Cursor 项目规则（完整版）
+# 知答 · Cursor 项目规则（三人共用 · 企业知识库问答 Agent）
 
 ## 项目是什么
-「知答」是企业内网知识库问答 Agent。员工登录后提问，系统从内部文档检索证据并带引用回答；证据不足则记入知识缺口，管理员补全后通知提问者。
+「知答」是企业内部知识库智能问答 Agent。员工登录后提问，系统从内部文档检索证据并带引用回答；证据不足则记入知识缺口，管理员补全后通知提问者。核心原则：宁可不答，不可错答。
 
-## 你现在是谁
-你在帮 B（生成与编排）写代码：LangGraph、POST /api/chat、多轮对话、跨会话记忆、缺口闭环。
-**不要修改后缀为 A、C 的文件夹。不要替 A 写 FAISS/文档上传，不要替 C 改 Vue 页面。**
+`GET /api/lookup` 可作为结构化直查保留；旧工单副驾产品形态与规则已废弃，不要再按工单草稿链路开发。
 
-## 技术栈
-- Python 3.10 + FastAPI + LangGraph + Pydantic v2
-- 会话库：SQLite（B 本地）
-- LLM：DeepSeek OpenAI 兼容接口
-- HTTP 同步 JSON，不要 SSE
+## 三人分工（不要越界）
+| 角色 | 负责 | 不要做 |
+|------|------|--------|
+| A · 数据与检索 | JWT、文档上传/切块/FAISS、lookup、用户/文档表 | 不要改 B 的 LangGraph、不要改 C 的 Vue 页面 |
+| B · 生成与编排 | LangGraph、`POST /api/chat`、多轮对话、缺口闭环 | 不要改 A 的检索/文档代码，不要替 C 改前端 |
+| C · 前端与工程 | Vue 页面、路由、部署、接口 mock / 联调 | 不要写 A/B 后端业务（JWT 实现、FAISS、LangGraph、LLM） |
 
-## 接口契约硬约束
+## 技术栈（不要随便换）
+- 后端：Python 3.10 + FastAPI + Uvicorn + Pydantic v2 + SQLite + LangGraph
+- 前端：Vue 3 + Vite，JS（不上 TS）
+- 前端可用：Vue Router
+- 前端不用：Pinia、Element Plus / Ant Design、axios（用原生 fetch）
+- token / role：存 `localStorage`
+- HTTP：同步 JSON，不要 SSE/WebSocket
+- LLM：DeepSeek OpenAI 兼容接口（B 负责）
+
+## 接口契约硬约束（改了就是事故）
+- 权威文档：`docs/接口契约.md`（v2）、`docs/知答-完整版-开发文档.md`
+- Base URL：`http://127.0.0.1:8000`；Vite：`http://127.0.0.1:5173`
 - 除 `/api/auth/login`、`/api/health` 外，请求头 `Authorization: Bearer <token>`
-- 字段 snake_case，空值 null，错误 `{"detail":"..."}`
-- confidence 只有 high / low
-- 主接口 `POST /api/chat`，body `{message, conversation_id}`
-- citations 为 `{document_id, title, chunk_index}`
-- 低置信必须带固定文案，并写入知识缺口（闲聊拒答除外）
+- 字段全部 snake_case；空值用 JSON `null`
+- 错误统一 `{"detail": "..."}` + 4xx/5xx
+- `confidence` 只有 `"high"` / `"low"`
+- 角色：`admin` / `ops` / `newbie`
+- 主问答：`POST /api/chat`，body `{ message, conversation_id }`
+- citations：`{ document_id, title, chunk_index }`
+- `POST /api/feedback`：`{ message_id, useful }`
+- 低置信须用固定文案，并写入知识缺口（闲聊拒答除外）
+- 不要静默改契约字段名；要加字段走三人评审
+
+## 后端规则（偏 B，且约束全员）
+- 编排走 LangGraph；证据不足宁可不答
+- 不要把产品改回工单草稿主导链路（`/api/draft` 若残留仅作兼容，前端不走）
+- 不要修改 A 目录下的检索 / 文档 / 认证实现来「图省事」
+
+## 前端规则（偏 C，且约束全员）
+- 结构：`zhida_web/src/router/`、`views/`、`api/`（mock 可切换真后端）
+- mock 返回必须与接口契约字段一致
+- Vue 用 `<script setup>`，不要 Options API
+- 注释中文；函数短小；需要新 npm/Python 包先问
+- 不要替 A/B 写后端业务逻辑
 
 ## 不要做的事
-- 不要改 A/C 目录
-- 不要把产品改回工单草稿 `/api/draft`
-- 不要静默改契约字段名
+- 不要上 MySQL/PostgreSQL/Redis（MVP 用 SQLite）
+- 不要引入 Element Plus / Ant Design / axios / Pinia
+- 不要越界改别人目录里的业务实现
+- 不要回到油猴脚本方案
+
+## 我让你做什么时
+- 先读 `docs/接口契约.md` 和相关现有文件
+- 改完告诉我改了哪个文件、为什么
+- 需求和契约冲突时提醒我，不要默默改契约
