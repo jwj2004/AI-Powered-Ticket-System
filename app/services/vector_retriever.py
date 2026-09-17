@@ -334,44 +334,16 @@ def detect_error_code(text: str) -> Optional[str]:
 
 def detect_error_code_enhanced(text: str) -> Optional[dict]:
     """
-    增强错误码识别：
-    1. 精确匹配 code（如 PAY_CALLBACK_TIMEOUT）
-    2. 模糊匹配 name 关键词（如"支付回调超时"）
-    3. 匹配 trigger_condition 中的关键词
+    错误码识别：仅精确匹配字面量（PAY_、ERR_、ORDER_ 等大写带下划线的 code）
+    自然语言描述不命中错误码表，走文档 RAG
     返回 {code, solution, match_type} 或 None
     """
     _load_error_codes()
 
-    text_lower = text.lower()
-
-    # 1. 精确匹配 code
     for ec in _error_code_cache:
         if ec["code_pattern"].search(text):
             log.debug(f"精确匹配到错误码: {ec['code']}")
             return {"code": ec["code"], "solution": ec["solution"], "match_type": "code"}
-
-    # 2. 模糊匹配 name 关键词（至少命中 2 个关键词才算）
-    best_match = None
-    best_score = 0
-    for ec in _error_code_cache:
-        if not ec["name_keywords"]:
-            continue
-        hits = sum(1 for kw in ec["name_keywords"] if kw in text)
-        score = hits / len(ec["name_keywords"]) if ec["name_keywords"] else 0
-        if hits >= 2 and score > best_score:
-            best_score = score
-            best_match = ec
-
-    if best_match:
-        log.debug(f"模糊匹配到错误码: {best_match['code']} (score={best_score:.2f})")
-        return {"code": best_match["code"], "solution": best_match["solution"], "match_type": "name"}
-
-    # 3. 单关键词匹配（更宽松，但只返回 code 用于后续验证）
-    for ec in _error_code_cache:
-        for kw in ec["name_keywords"]:
-            if len(kw) >= 3 and kw in text:
-                log.debug(f"单关键词匹配到错误码: {ec['code']} (keyword={kw})")
-                return {"code": ec["code"], "solution": ec["solution"], "match_type": "keyword"}
 
     return None
 
