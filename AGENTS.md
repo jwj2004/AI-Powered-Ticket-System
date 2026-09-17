@@ -19,6 +19,7 @@
 - 向量检索在 A；`USE_MOCK_RETRIEVE=true` 时 B 用内置文档块
 - 全部同步 JSON；除 `/api/auth/login` 与 `/api/health` 外需要 `Authorization: Bearer <token>`
 - `confidence` 只有 `high` / `low`；空值用 `null`
+- JWT 密钥与 A 统一为 `zhida-jwt-shared-2026`（`JWT_SECRET` / `SHARED_JWT_SECRET`），不要另起一套
 
 ## 三、B 对外接口（契约 v2）
 

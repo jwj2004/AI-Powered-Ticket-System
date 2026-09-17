@@ -4,6 +4,9 @@ from functools import lru_cache
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+# 与 A 统一的 JWT 密钥，B 内所有签发/校验都必须用这一串
+SHARED_JWT_SECRET = "zhida-jwt-shared-2026"
+
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
@@ -30,7 +33,7 @@ class Settings(BaseSettings):
     database_path: str = "./backend/data/zhida_b.db"
 
     # JWT：必须与 A 的 jwt_secret 一致，否则 A 签发的 token 会被 B 判无效
-    jwt_secret: str = "zhida-jwt-shared-2026"
+    jwt_secret: str = SHARED_JWT_SECRET
     jwt_algorithm: str = "HS256"
     jwt_expire_minutes: int = 1440
 
