@@ -82,6 +82,31 @@ class TestNotifications:
         r = client.post("/api/notifications/read-all", headers=admin_headers)
         assert r.status_code == 200
 
+    def test_admin_can_mark_others_notification(self, client, admin_headers, ops_headers, db_session):
+        gap = KnowledgeGap(question="别人的问题", user_id=2, status="pending")
+        db_session.add(gap)
+        db_session.commit()
+        client.post(f"/api/gaps/{gap.id}/resolve", json={"answer": "答案"}, headers=admin_headers)
+
+        ops_notifs = client.get("/api/notifications", headers=ops_headers).json()
+        assert ops_notifs["total"] >= 1
+        notif_id = ops_notifs["items"][0]["notification_id"]
+
+        r = client.post(f"/api/notifications/{notif_id}/read", headers=admin_headers)
+        assert r.status_code == 200
+
+    def test_non_admin_cannot_mark_others_notification(self, client, admin_headers, newbie_headers, db_session):
+        gap = KnowledgeGap(question="admin的问题", user_id=1, status="pending")
+        db_session.add(gap)
+        db_session.commit()
+        client.post(f"/api/gaps/{gap.id}/resolve", json={"answer": "答案"}, headers=admin_headers)
+
+        admin_notifs = client.get("/api/notifications", headers=admin_headers).json()
+        notif_id = admin_notifs["items"][0]["notification_id"]
+
+        r = client.post(f"/api/notifications/{notif_id}/read", headers=newbie_headers)
+        assert r.status_code == 404
+
 
 class TestDashboard:
     def test_dashboard_admin(self, client, admin_headers):
