@@ -1,0 +1,25 @@
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: zhida-backend
+    ports:
+      - "8000:8000"
+    volumes:
+      # SQLite 与本地目录共享
+      - ./db:/app/db
+    environment:
+      - PYTHONUNBUFFERED=1
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./zhida_web
+      dockerfile: Dockerfile
+    container_name: zhida-frontend
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+    restart: unless-stopped

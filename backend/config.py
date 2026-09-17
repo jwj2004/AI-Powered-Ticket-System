@@ -1,0 +1,49 @@
+"""LLM、JWT、检索客户端等运行时配置。"""
+
+from functools import lru_cache
+
+from pydantic_settings import BaseSettings, SettingsConfigDict
+
+# 与 A 统一的 JWT 密钥，B 内所有签发/校验都必须用这一串
+SHARED_JWT_SECRET = "zhida-jwt-shared-2026"
+
+
+class Settings(BaseSettings):
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        env_file_encoding="utf-8",
+        extra="ignore",
+    )
+
+    # LLM（OpenAI 兼容接口）
+    llm_api_key: str = ""
+    llm_base_url: str = "https://api.deepseek.com"
+    llm_model: str = "deepseek-chat"
+    llm_timeout_seconds: float = 10.0
+
+    # A 的检索 / 错误码直查；USE_MOCK_RETRIEVE=true 时不真正发 HTTP
+    retrieve_base_url: str = "http://127.0.0.1:8000"
+    retrieve_timeout_seconds: float = 10.0
+    use_mock_retrieve: bool = True
+
+    # 文档块相似度阈值：低于此值视为证据不足
+    high_score_threshold: float = 0.75
+
+    # B 自己的会话 / 缺口 / 通知库（不碰 A 的 SQLite）
+    database_path: str = "./backend/data/zhida_b.db"
+
+    # JWT：必须与 A 的 jwt_secret 一致，否则 A 签发的 token 会被 B 判无效
+    jwt_secret: str = SHARED_JWT_SECRET
+    jwt_algorithm: str = "HS256"
+    jwt_expire_minutes: int = 1440
+
+    # CORS（C 的 Vue 开发地址）
+    cors_origins: list[str] = [
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+    ]
+
+
+@lru_cache
+def get_settings() -> Settings:
+    return Settings()
