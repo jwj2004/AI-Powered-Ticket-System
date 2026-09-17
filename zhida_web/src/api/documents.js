@@ -126,12 +126,52 @@ export async function deleteDocument(id) {
 export async function listDocumentVersions(id) {
   if (USE_MOCK) {
     return [
-      { version: 1, created_at: '2026-09-01T10:00:00' },
-      { version: 2, created_at: '2026-09-10T10:00:00' },
-      { version: 3, created_at: '2026-09-15T10:00:00' },
+      {
+        version: 1,
+        created_at: '2026-09-01T10:00:00',
+        content: '（mock v1）初稿内容…',
+      },
+      {
+        version: 2,
+        created_at: '2026-09-10T10:00:00',
+        content: '（mock v2）修订后内容…',
+      },
+      {
+        version: 3,
+        created_at: '2026-09-15T10:00:00',
+        content: '（mock v3）当前正式版内容…',
+      },
     ]
   }
-  return request(`/api/documents/${id}/versions`)
+  const data = await request(`/api/documents/${id}/versions`)
+  const items = Array.isArray(data) ? data : data?.items || []
+  return items.map((v) => ({
+    version: v.version,
+    created_at: v.created_at ?? null,
+    content: v.content ?? null,
+  }))
+}
+
+/**
+ * 版本详情：契约未规定；尝试 GET /api/documents/{id}/versions/{version}
+ * 没有则返回 null，由页面只展示版本列表
+ */
+export async function getDocumentVersion(id, version) {
+  if (USE_MOCK) {
+    const list = await listDocumentVersions(id)
+    const row = list.find((v) => Number(v.version) === Number(version))
+    if (!row) return null
+    return {
+      version: row.version,
+      created_at: row.created_at,
+      content: row.content ?? null,
+    }
+  }
+  try {
+    return await request(`/api/documents/${id}/versions/${version}`)
+  } catch {
+    return null
+  }
 }
 
 export { MOCK_DOC_SPACES }

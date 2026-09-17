@@ -36,10 +36,11 @@
               <button
                 v-if="g.status === 'pending'"
                 type="button"
-                class="link-btn"
+                class="icon-btn"
+                title="处理"
                 @click="openResolve(g)"
               >
-                处理
+                ✓
               </button>
               <span v-else class="muted">已处理</span>
             </td>
@@ -148,14 +149,15 @@ async function submitResolve() {
 
 <style scoped>
 .panel {
-  background: #fff;
-  border-radius: 8px;
-  padding: 20px;
-  border: 1px solid #e8e8e8;
+  background: var(--color-surface);
+  border-radius: 12px;
+  padding: 20px 22px;
+  box-shadow: var(--shadow);
+  border: 1px solid var(--color-border);
 }
 .toolbar { margin-bottom: 16px; }
-h2 { margin: 0 0 4px; }
-.muted { color: #888; margin: 0; font-size: 13px; }
+h2 { margin: 0 0 4px; font-size: 18px; }
+.muted { color: var(--color-text-secondary); margin: 0; font-size: 13px; }
 .table-wrap { overflow: auto; }
 table {
   width: 100%;
@@ -163,45 +165,56 @@ table {
   font-size: 13px;
 }
 th, td {
-  border-bottom: 1px solid #eee;
-  padding: 10px 8px;
+  border-bottom: 1px solid var(--color-border);
+  padding: 12px 10px;
   text-align: left;
 }
-th { color: #666; font-weight: 600; background: #fafafa; }
+th { color: #64748b; font-weight: 600; background: #f8fafc; }
+tbody tr:hover { background: #f1f5f9; }
 .empty { text-align: center; color: #999; }
 .status {
   display: inline-block;
   padding: 2px 8px;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   font-size: 12px;
 }
-.status.pending { background: #fff8e1; color: #b26a00; }
-.status.resolved { background: #e6f4ea; color: #137333; }
+.status.pending { background: #fff7ed; color: var(--color-warn); }
+.status.resolved { background: #ecfdf5; color: var(--color-success); }
+.icon-btn {
+  width: 30px;
+  height: 30px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: #fff;
+  color: var(--color-primary);
+  cursor: pointer;
+  font-weight: 700;
+}
+.icon-btn:hover { background: var(--color-primary-soft); }
 .link-btn {
   border: none;
   background: transparent;
-  color: #1a73e8;
+  color: var(--color-primary);
   cursor: pointer;
-  font: inherit;
   padding: 0;
 }
 .btn {
   border: none;
-  background: #1a73e8;
+  background: var(--color-primary);
   color: #fff;
-  border-radius: 6px;
-  padding: 8px 14px;
-  font: inherit;
+  border-radius: var(--radius-sm);
+  padding: 9px 16px;
+  font-weight: 600;
   cursor: pointer;
 }
-.btn:disabled { background: #9bb8e8; cursor: not-allowed; }
-.error { color: #d93025; }
-.ok { color: #137333; }
+.btn:disabled { background: #93c5fd; cursor: not-allowed; }
+.error { color: var(--color-danger); }
+.ok { color: var(--color-success); }
 
 .modal-mask {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.35);
+  background: rgba(15, 23, 42, 0.4);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -212,9 +225,9 @@ th { color: #666; font-weight: 600; background: #fafafa; }
   width: 100%;
   max-width: 480px;
   background: #fff;
-  border-radius: 10px;
+  border-radius: 14px;
   padding: 20px;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+  box-shadow: var(--shadow-lg);
 }
 .modal h3 { margin: 0 0 8px; }
 .q { color: #555; margin: 0 0 12px; }
@@ -222,14 +235,13 @@ th { color: #666; font-weight: 600; background: #fafafa; }
   display: block;
   font-weight: 600;
   margin: 12px 0 6px;
+  font-size: 13px;
 }
 .textarea, .select {
   width: 100%;
-  padding: 8px 10px;
-  border: 1px solid #ccc;
-  border-radius: 6px;
-  font: inherit;
-  box-sizing: border-box;
+  padding: 9px 12px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
 }
 .textarea { resize: vertical; }
 .modal-actions {

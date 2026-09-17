@@ -3,7 +3,7 @@
     <div class="toolbar">
       <div>
         <h2>数据看板</h2>
-        <p class="muted">今日概览与趋势 · mock /api/dashboard</p>
+        <p class="muted">今日概览与分布 · /api/dashboard</p>
       </div>
     </div>
 
@@ -30,7 +30,7 @@
 
     <div v-if="data" class="charts">
       <div class="chart-box">
-        <div class="chart-title">近 7 天问答量趋势</div>
+        <div class="chart-title">{{ data.chart_trend_title || '置信度分布' }}</div>
         <div ref="trendEl" class="chart"></div>
       </div>
       <div class="chart-box">
@@ -79,10 +79,10 @@ function renderCharts() {
       yAxis: { type: 'value', minInterval: 1 },
       series: [
         {
-          name: '问答量',
+          name: '数量',
           type: 'bar',
           data: trend.map((d) => d.count),
-          itemStyle: { color: '#1a73e8', borderRadius: [4, 4, 0, 0] },
+          itemStyle: { color: '#1e40af', borderRadius: [4, 4, 0, 0] },
           barWidth: 28,
         },
       ],
@@ -107,7 +107,7 @@ function renderCharts() {
           name: '次数',
           type: 'bar',
           data: values,
-          itemStyle: { color: '#34a853', borderRadius: [0, 4, 4, 0] },
+          itemStyle: { color: '#15803d', borderRadius: [0, 4, 4, 0] },
           barWidth: 16,
         },
       ],
@@ -142,46 +142,52 @@ onBeforeUnmount(() => {
 
 <style scoped>
 .panel {
-  background: #fff;
-  border-radius: 8px;
-  padding: 20px;
-  border: 1px solid #e8e8e8;
+  background: transparent;
+  padding: 0;
+  border: none;
 }
 .toolbar { margin-bottom: 16px; }
-h2 { margin: 0 0 4px; }
-.muted { color: #888; margin: 0; font-size: 13px; }
-.error { color: #d93025; }
+h2 { margin: 0 0 4px; font-size: 18px; }
+.muted { color: var(--color-text-secondary, #6b7280); margin: 0; font-size: 13px; }
+.error { color: var(--color-danger, #dc2626); }
 
 .cards {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 12px;
+  gap: 14px;
   margin-bottom: 16px;
 }
 .card {
-  background: #f8fafc;
-  border: 1px solid #e8e8e8;
-  border-radius: 8px;
-  padding: 14px 16px;
+  background: var(--color-surface, #fff);
+  border: 1px solid var(--color-border, #e5e7eb);
+  border-radius: 12px;
+  padding: 18px 20px;
+  box-shadow: var(--shadow, 0 1px 3px rgba(15, 23, 42, 0.06));
 }
-.card-label { font-size: 13px; color: #666; }
+.card-label {
+  font-size: 12px;
+  color: #9ca3af;
+}
 .card-value {
-  margin-top: 6px;
-  font-size: 28px;
+  margin-top: 10px;
+  font-size: 32px;
   font-weight: 700;
-  color: #1a73e8;
+  line-height: 1.1;
+  color: var(--color-primary, #1e40af);
 }
-.card-value.warn { color: #b26a00; }
+.card-value.warn { color: var(--color-warn, #b45309); }
 
 .charts {
   display: grid;
   grid-template-columns: 1.2fr 1fr;
-  gap: 12px;
+  gap: 14px;
 }
 .chart-box {
-  border: 1px solid #eee;
-  border-radius: 8px;
-  padding: 12px;
+  background: var(--color-surface, #fff);
+  border: 1px solid var(--color-border, #e5e7eb);
+  border-radius: 12px;
+  padding: 14px 16px;
+  box-shadow: var(--shadow, 0 1px 3px rgba(15, 23, 42, 0.06));
 }
 .chart-title {
   font-weight: 600;
@@ -190,7 +196,7 @@ h2 { margin: 0 0 4px; }
 }
 .chart { height: 280px; width: 100%; }
 
-@media (max-width: 960px) {
+@media (max-width: 720px) {
   .cards { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .charts { grid-template-columns: 1fr; }
 }

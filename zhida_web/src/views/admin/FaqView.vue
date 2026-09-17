@@ -100,10 +100,11 @@ async function submitCreate() {
 
 <style scoped>
 .panel {
-  background: #fff;
-  border-radius: 8px;
-  padding: 20px;
-  border: 1px solid #e8e8e8;
+  background: var(--color-surface);
+  border-radius: 12px;
+  padding: 20px 22px;
+  box-shadow: var(--shadow);
+  border: 1px solid var(--color-border);
 }
 .toolbar {
   display: flex;
@@ -112,42 +113,44 @@ async function submitCreate() {
   gap: 12px;
   margin-bottom: 16px;
 }
-h2 { margin: 0 0 4px; }
-.muted { color: #888; margin: 0; font-size: 13px; }
+h2 { margin: 0 0 4px; font-size: 18px; }
+.muted { color: var(--color-text-secondary); margin: 0; font-size: 13px; }
 .btn {
   border: none;
-  background: #1a73e8;
+  background: var(--color-primary);
   color: #fff;
-  border-radius: 6px;
-  padding: 8px 14px;
-  font: inherit;
+  border-radius: var(--radius-sm);
+  padding: 9px 16px;
+  font-weight: 600;
   cursor: pointer;
 }
-.btn:disabled { background: #9bb8e8; cursor: not-allowed; }
+.btn:hover:not(:disabled) { background: var(--color-primary-hover); }
+.btn:disabled { background: #93c5fd; cursor: not-allowed; }
 .empty { color: #999; text-align: center; padding: 24px 0; }
 .card {
-  border: 1px solid #eee;
-  border-radius: 8px;
-  padding: 12px 14px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  padding: 14px 16px;
   margin-bottom: 10px;
+  background: #fff;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.03);
 }
 .q { font-weight: 600; margin-bottom: 6px; }
 .a { color: #444; white-space: pre-wrap; }
 .meta { margin-top: 8px; font-size: 12px; color: #888; }
-.error { color: #d93025; }
-.ok { color: #137333; }
+.error { color: var(--color-danger); }
+.ok { color: var(--color-success); }
 .link-btn {
   border: none;
   background: transparent;
-  color: #1a73e8;
+  color: var(--color-primary);
   cursor: pointer;
-  font: inherit;
 }
 
 .modal-mask {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.35);
+  background: rgba(15, 23, 42, 0.4);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -158,23 +161,22 @@ h2 { margin: 0 0 4px; }
   width: 100%;
   max-width: 480px;
   background: #fff;
-  border-radius: 10px;
+  border-radius: 14px;
   padding: 20px;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+  box-shadow: var(--shadow-lg);
 }
 .modal h3 { margin: 0 0 12px; }
 .label {
   display: block;
   font-weight: 600;
   margin: 12px 0 6px;
+  font-size: 13px;
 }
 .input, .textarea {
   width: 100%;
-  padding: 8px 10px;
-  border: 1px solid #ccc;
-  border-radius: 6px;
-  font: inherit;
-  box-sizing: border-box;
+  padding: 9px 12px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
 }
 .textarea { resize: vertical; }
 .modal-actions {

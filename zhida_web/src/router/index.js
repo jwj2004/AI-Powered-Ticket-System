@@ -8,6 +8,7 @@ import DocumentsView from '../views/admin/DocumentsView.vue'
 import GapsView from '../views/admin/GapsView.vue'
 import DashboardView from '../views/admin/DashboardView.vue'
 import FaqView from '../views/admin/FaqView.vue'
+import PendingFaqView from '../views/admin/PendingFaqView.vue'
 
 const router = createRouter({
   history: createWebHistory(),
@@ -33,6 +34,7 @@ const router = createRouter({
         { path: 'documents', name: 'admin-documents', component: DocumentsView },
         { path: 'gaps', name: 'admin-gaps', component: GapsView },
         { path: 'dashboard', name: 'admin-dashboard', component: DashboardView },
+        { path: 'pending-faq', name: 'admin-pending-faq', component: PendingFaqView },
         { path: 'faq', name: 'admin-faq', component: FaqView },
       ],
     },

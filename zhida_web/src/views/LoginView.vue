@@ -1,6 +1,7 @@
 <template>
   <div class="login-page">
     <div class="card">
+      <div class="logo">知</div>
       <h1>知答</h1>
       <p class="sub">企业内部知识库问答</p>
 
@@ -71,63 +72,93 @@ async function onSubmit() {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: #f0f2f5;
-  font: 14px/1.6 -apple-system, "PingFang SC", sans-serif;
+  background: var(--color-bg);
   padding: 24px;
 }
 .card {
   width: 100%;
-  max-width: 360px;
-  background: #fff;
-  border-radius: 8px;
-  padding: 28px 24px;
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
+  max-width: 380px;
+  background: var(--color-surface);
+  border-radius: 16px;
+  padding: 36px 32px 28px;
+  box-shadow: var(--shadow-lg);
+}
+.logo {
+  width: 52px;
+  height: 52px;
+  margin: 0 auto 12px;
+  border-radius: 14px;
+  background: linear-gradient(145deg, #1e40af, #3b82f6);
+  color: #fff;
+  font-size: 22px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  letter-spacing: 0.02em;
 }
 h1 {
   margin: 0;
   text-align: center;
-  font-size: 24px;
+  font-size: 26px;
+  color: var(--color-text);
+  font-weight: 700;
 }
 .sub {
   text-align: center;
-  color: #888;
-  margin: 4px 0 20px;
+  color: var(--color-text-secondary);
+  margin: 6px 0 24px;
+  font-size: 13px;
 }
 .label {
   display: block;
   font-weight: 600;
-  margin: 12px 0 6px;
+  font-size: 13px;
+  margin: 14px 0 6px;
+  color: #374151;
 }
 .input {
   width: 100%;
-  padding: 10px;
-  border: 1px solid #ccc;
-  border-radius: 6px;
-  box-sizing: border-box;
-  font: inherit;
+  padding: 11px 14px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  background: #fff;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+.input:focus {
+  outline: none;
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px rgba(30, 64, 175, 0.15);
 }
 .btn {
   width: 100%;
-  margin-top: 18px;
-  padding: 10px;
+  margin-top: 22px;
+  padding: 12px;
   border: none;
-  border-radius: 6px;
-  background: #1a73e8;
+  border-radius: var(--radius);
+  background: var(--color-primary);
   color: #fff;
-  font: inherit;
+  font-weight: 600;
   cursor: pointer;
+  transition: background 0.15s;
+}
+.btn:hover:not(:disabled) {
+  background: var(--color-primary-hover);
 }
 .btn:disabled {
-  background: #9bb8e8;
+  background: #93c5fd;
   cursor: not-allowed;
 }
 .error {
-  color: #d93025;
+  color: var(--color-danger);
   margin: 10px 0 0;
+  font-size: 13px;
 }
 .hint {
-  margin-top: 14px;
+  margin-top: 16px;
   font-size: 12px;
-  color: #999;
+  color: #9ca3af;
+  text-align: center;
+  line-height: 1.5;
 }
 </style>
