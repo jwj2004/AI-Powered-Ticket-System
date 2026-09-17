@@ -1,12 +1,18 @@
 import { USE_MOCK, request } from './http'
 import { MOCK_GAPS } from './mock/data'
 
-/** GET /api/gaps */
+/** GET /api/gaps → 真后端为 { total, items }，对外统一返回数组 */
 export async function listGaps() {
   if (USE_MOCK) {
     return MOCK_GAPS.map((g) => ({ ...g }))
   }
-  return request('/api/gaps')
+  const data = await request('/api/gaps')
+  const items = Array.isArray(data) ? data : data?.items || []
+  // 后端字段是 id，前端页面用 gap_id
+  return items.map((g) => ({
+    ...g,
+    gap_id: g.gap_id ?? g.id,
+  }))
 }
 
 /** POST /api/gaps/{gap_id}/resolve */

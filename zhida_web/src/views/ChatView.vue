@@ -74,13 +74,14 @@
               :class="{
                 user: m.role === 'user',
                 assistant: m.role === 'assistant',
-                low: m.role === 'assistant' && m.confidence === 'low',
+                // 仅 low 标黄；high / medium 正常气泡
+                low: m.role === 'assistant' && isLowConfidence(m.confidence),
               }"
             >
               <div class="role">{{ m.role === 'user' ? '我' : '知答' }}</div>
               <div class="content">{{ m.content }}</div>
 
-              <!-- 引用来源：可点击 -->
+              <!-- 引用来源：high / medium / low 都列出 -->
               <div v-if="m.citations?.length" class="cites">
                 <div class="cites-label">引用来源</div>
                 <button
@@ -94,8 +95,8 @@
                 </button>
               </div>
 
-              <!-- 低置信度 + gap_id -->
-              <div v-if="m.confidence === 'low'" class="gap-tip">
+              <!-- 仅 low：黄色提示 + gap_id；medium 不显示 -->
+              <div v-if="isLowConfidence(m.confidence)" class="gap-tip">
                 证据不足，已记入知识缺口
                 <span v-if="m.gap_id != null">（gap_id: {{ m.gap_id }}）</span>
               </div>
@@ -195,13 +196,19 @@ const citationDetail = ref(null)
 const conversations = ref([])
 const convLoading = ref(false)
 const notifications = ref([])
+const notifUnread = ref(0)
 const showNotif = ref(false)
 
-const unreadCount = computed(() => notifications.value.filter((n) => !n.read).length)
+const unreadCount = computed(() => notifUnread.value)
 
 function formatTime(iso) {
   if (!iso) return ''
   return String(iso).replace('T', ' ').slice(0, 16)
+}
+
+/** confidence: high | medium | low；仅 low 显示证据不足黄条 */
+function isLowConfidence(confidence) {
+  return confidence === 'low'
 }
 
 async function refreshConversations() {
@@ -217,7 +224,9 @@ async function refreshConversations() {
 
 async function refreshNotifications() {
   try {
-    notifications.value = await listNotifications()
+    const data = await listNotifications()
+    notifications.value = data.items || []
+    notifUnread.value = data.unread ?? 0
   } catch (e) {
     /* 通知失败不影响主流程 */
   }
@@ -329,6 +338,7 @@ async function onOpenNotif(n) {
   if (!n.read) {
     await markNotificationRead(n.notification_id)
     n.read = true
+    if (notifUnread.value > 0) notifUnread.value -= 1
   }
 }
 

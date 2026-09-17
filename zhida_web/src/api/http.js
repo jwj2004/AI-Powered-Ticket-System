@@ -7,7 +7,7 @@ import { getToken, clearAuth } from './authStorage'
 export const API_BASE = 'http://127.0.0.1:8000'
 
 /** D1：true = 前端 mock；A 接口就绪后改为 false */
-export const USE_MOCK = true
+export const USE_MOCK = false
 
 export async function request(path, options = {}) {
   const headers = {
@@ -25,7 +25,7 @@ export async function request(path, options = {}) {
     headers,
   })
 
-  if (resp.status === 401) {
+  if (resp.status === 401 && !options.skipAuthRedirect) {
     clearAuth()
     if (typeof window !== 'undefined' && !window.location.pathname.startsWith('/login')) {
       window.location.href = '/login'

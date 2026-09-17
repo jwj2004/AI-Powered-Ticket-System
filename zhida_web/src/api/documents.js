@@ -14,12 +14,19 @@ function spaceName(spaceId) {
   return s ? s.name : '未分类'
 }
 
-/** GET /api/documents */
+/** GET /api/documents → 真后端为 { total, items }，对外统一返回数组 */
 export async function listDocuments() {
   if (USE_MOCK) {
     return MOCK_DOCUMENTS.map((d) => ({ ...d }))
   }
-  return request('/api/documents')
+  const data = await request('/api/documents')
+  const items = Array.isArray(data) ? data : data?.items || []
+  // 列表字段兼容：后端有 space_id，表格仍读 space / updated_at
+  return items.map((d) => ({
+    ...d,
+    space: d.space ?? (d.space_id != null ? `空间#${d.space_id}` : ''),
+    updated_at: d.updated_at ?? null,
+  }))
 }
 
 /** GET /api/documents/{id} */
