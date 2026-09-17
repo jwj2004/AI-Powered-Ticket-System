@@ -146,7 +146,7 @@ class VectorRetriever:
     # ============================================================
 
     @classmethod
-    def hybrid_search(cls, query: str, top_k: int = 3) -> dict:
+    def hybrid_search(cls, query: str, top_k: int = 3, conversation_history: str = None) -> dict:
         """
         混合检索：
         1. 先检测错误码，精确命中直接返回结构化 solution
@@ -164,22 +164,20 @@ class VectorRetriever:
             "confidence": "low",
         }
 
-        # 1. 错误码精确查询
-        code = detect_error_code(query)
-        if code:
-            db = SessionLocal()
-            try:
-                ec = db.query(ErrorCode).filter(ErrorCode.code == code).first()
-                if ec:
-                    result["error_code"] = ec.code
-                    result["solution"] = ec.solution
-                    result["confidence"] = "high"
-                    log.info(f"错误码精确命中: {ec.code}")
-            finally:
-                db.close()
+        search_query = query
+        if conversation_history:
+            search_query = f"{conversation_history}\n{query}"
+
+        # 1. 错误码精确查询（增强：匹配 code + name + trigger_condition）
+        ec_result = detect_error_code_enhanced(query)
+        if ec_result:
+            result["error_code"] = ec_result["code"]
+            result["solution"] = ec_result["solution"]
+            result["confidence"] = "high"
+            log.info(f"错误码精确命中: {ec_result['code']} (匹配方式: {ec_result['match_type']})")
 
         # 2. 文档块向量召回
-        doc_results = cls.search_documents(query, top_k)
+        doc_results = cls.search_documents(search_query, top_k)
         if doc_results:
             db = SessionLocal()
             try:
@@ -201,7 +199,7 @@ class VectorRetriever:
                 db.close()
 
         # 3. 工单向量召回（补充）
-        ticket_results = cls.search_tickets(query, top_k)
+        ticket_results = cls.search_tickets(search_query, top_k)
         if ticket_results:
             db = SessionLocal()
             try:
@@ -219,8 +217,10 @@ class VectorRetriever:
 
         # 置信度判断
         if result["confidence"] != "high":
-            if doc_results and doc_results[0][2] > 0.7:
+            if doc_results and doc_results[0][2] > 0.75:
                 result["confidence"] = "medium"
+            elif doc_results and doc_results[0][2] > 0.6:
+                result["confidence"] = "low"
             elif doc_results or ticket_results:
                 result["confidence"] = "low"
             else:
@@ -294,34 +294,57 @@ class VectorRetriever:
 
 
 # ============================================================
-# 错误码识别
+# 错误码识别（增强版：匹配 code + name + trigger_condition）
 # ============================================================
 
-_error_code_patterns = []
+_error_code_cache = []
 
 
 def _load_error_codes():
-    global _error_code_patterns
-    if _error_code_patterns:
+    global _error_code_cache
+    if _error_code_cache:
         return
     db = SessionLocal()
     try:
-        codes = db.query(ErrorCode.code).all()
-        _error_code_patterns = [
-            (row.code, re.compile(re.escape(row.code), re.IGNORECASE))
-            for row in codes
+        codes = db.query(ErrorCode).all()
+        _error_code_cache = [
+            {
+                "code": ec.code,
+                "name": ec.name,
+                "trigger_condition": ec.trigger_condition or "",
+                "solution": ec.solution or "",
+                "code_pattern": re.compile(re.escape(ec.code), re.IGNORECASE),
+                "name_keywords": [w for w in ec.name.split() if len(w) > 1] if ec.name else [],
+            }
+            for ec in codes
         ]
-        log.info(f"加载 {len(_error_code_patterns)} 个错误码用于文本匹配")
+        log.info(f"加载 {len(_error_code_cache)} 个错误码用于增强匹配")
     finally:
         db.close()
 
 
 def detect_error_code(text: str) -> Optional[str]:
+    """旧接口保留兼容"""
     _load_error_codes()
-    for code, pattern in _error_code_patterns:
-        if pattern.search(text):
-            log.debug(f"文本匹配到错误码: {code}")
-            return code
+    for ec in _error_code_cache:
+        if ec["code_pattern"].search(text):
+            return ec["code"]
+    return None
+
+
+def detect_error_code_enhanced(text: str) -> Optional[dict]:
+    """
+    错误码识别：仅精确匹配字面量（PAY_、ERR_、ORDER_ 等大写带下划线的 code）
+    自然语言描述不命中错误码表，走文档 RAG
+    返回 {code, solution, match_type} 或 None
+    """
+    _load_error_codes()
+
+    for ec in _error_code_cache:
+        if ec["code_pattern"].search(text):
+            log.debug(f"精确匹配到错误码: {ec['code']}")
+            return {"code": ec["code"], "solution": ec["solution"], "match_type": "code"}
+
     return None
 
 
