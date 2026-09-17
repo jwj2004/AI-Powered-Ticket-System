@@ -13,23 +13,23 @@ from app.models.feedback import Feedback
 router = APIRouter(prefix="/api", tags=["问答"])
 
 
-class ChatRequest(BaseModel):
-    conversation_id: Optional[int] = None
-    query: str
-
-
 class Citation(BaseModel):
-    source: str
-    content: str
-    score: float
+    document_id: int
+    title: str
+    chunk_index: int
+
+
+class ChatRequest(BaseModel):
+    message: str
+    conversation_id: Optional[int] = None
 
 
 class ChatResponse(BaseModel):
     conversation_id: int
-    message_id: int
-    answer: str
+    reply: str
     citations: list[Citation]
     confidence: str
+    message_id: int
 
 
 @router.post("/chat", response_model=ChatResponse)
@@ -44,18 +44,15 @@ def chat(
         if not conv or conv.user_id != user.id:
             raise HTTPException(status_code=404, detail="会话不存在")
     else:
-        conv = Conversation(user_id=user.id, title=req.query[:50])
+        conv = Conversation(user_id=user.id, title=req.message[:50])
         db.add(conv)
         db.flush()
 
-    user_msg = Message(conversation_id=conv.id, role="user", content=req.query)
+    user_msg = Message(conversation_id=conv.id, role="user", content=req.message)
     db.add(user_msg)
     db.flush()
 
     # TODO(B): LangGraph 编排 → 路由节点 → 检索节点 → 生成节点 → 质量节点
-    # A 提供: detect_error_code() + VectorRetriever.search()
-    # B 提供: LLM 生成 + 引用拼装
-    # 当前返回占位
     assistant_msg = Message(
         conversation_id=conv.id,
         role="assistant",
@@ -69,10 +66,10 @@ def chat(
 
     return ChatResponse(
         conversation_id=conv.id,
-        message_id=assistant_msg.id,
-        answer=assistant_msg.content,
+        reply=assistant_msg.content,
         citations=[],
         confidence=assistant_msg.confidence,
+        message_id=assistant_msg.id,
     )
 
 

@@ -13,3 +13,4 @@ from app.models.feedback import Feedback  # noqa: F401
 from app.models.knowledge_gap import KnowledgeGap  # noqa: F401
 from app.models.notification import Notification  # noqa: F401
 from app.models.doc_version import DocVersion  # noqa: F401
+from app.models.faq import FAQ  # noqa: F401
