@@ -120,7 +120,7 @@ def delete_document(db: Session, doc_id: int):
     log.info(f"文档删除: id={doc_id}")
 
 
-def update_document(db: Session, doc_id: int, content: str):
+def update_document(db: Session, doc_id: int, content: str, title: str | None = None):
     doc = db.query(Document).filter(Document.id == doc_id).first()
     if not doc:
         raise ValueError("文档不存在")
@@ -130,6 +130,8 @@ def update_document(db: Session, doc_id: int, content: str):
 
     doc.version += 1
     doc.content = content
+    if title is not None:
+        doc.title = title
 
     version = DocVersion(
         document_id=doc.id,
