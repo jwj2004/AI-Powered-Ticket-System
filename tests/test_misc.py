@@ -105,3 +105,39 @@ class TestDashboard:
         data = r.json()
         assert data["questions"]["total_today"] >= 1
         assert data["conversations"]["total"] >= 1
+
+
+class TestFAQCandidates:
+    def test_faq_candidates_empty(self, client, admin_headers):
+        r = client.get("/api/dashboard/faq-candidates", headers=admin_headers)
+        assert r.status_code == 200
+        assert r.json() == []
+
+    def test_faq_candidates_after_chat(self, client, admin_headers):
+        for _ in range(3):
+            client.post("/api/chat", json={"message": "支付回调超时", "conversation_id": None}, headers=admin_headers)
+        client.post("/api/chat", json={"message": "其他问题", "conversation_id": None}, headers=admin_headers)
+
+        r = client.get("/api/dashboard/faq-candidates", headers=admin_headers)
+        assert r.status_code == 200
+        data = r.json()
+        assert len(data) >= 1
+        assert data[0]["question"] == "支付回调超时"
+        assert data[0]["count"] >= 3
+
+    def test_faq_candidates_excludes_existing_faq(self, client, admin_headers, db_session):
+        from app.models.faq import FAQ
+        db_session.add(FAQ(question="支付回调超时", answer="联系支付服务商", gap_id=None))
+        db_session.commit()
+
+        for _ in range(3):
+            client.post("/api/chat", json={"message": "支付回调超时", "conversation_id": None}, headers=admin_headers)
+
+        r = client.get("/api/dashboard/faq-candidates", headers=admin_headers)
+        assert r.status_code == 200
+        questions = [item["question"] for item in r.json()]
+        assert "支付回调超时" not in questions
+
+    def test_faq_candidates_non_admin(self, client, newbie_headers):
+        r = client.get("/api/dashboard/faq-candidates", headers=newbie_headers)
+        assert r.status_code == 403

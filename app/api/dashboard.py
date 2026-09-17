@@ -11,6 +11,7 @@ from app.models.conversation import Conversation
 from app.models.feedback import Feedback
 from app.models.document import Document
 from app.models.document_chunk import DocumentChunk
+from app.models.faq import FAQ
 from app.models.knowledge_gap import KnowledgeGap
 from app.models.doc_space import DocSpace
 
@@ -152,3 +153,47 @@ def dashboard(
             for cid, title, cnt in top_questions
         ],
     }
+
+
+@router.get("/faq-candidates")
+def faq_candidates(
+    db: Session = Depends(get_db),
+    user: User = Depends(require_admin),
+):
+    """高频问题 Top10 待确认：按问题文本聚类统计，排除已有 FAQ"""
+
+    def normalize(text: str) -> str:
+        return " ".join(text.strip().lower().split())[:200]
+
+    raw_rows = (
+        db.query(Message.content, func.count(Message.id).label("cnt"))
+        .filter(Message.role == "user")
+        .group_by(Message.content)
+        .order_by(desc("cnt"))
+        .limit(100)
+        .all()
+    )
+
+    faq_set = {normalize(q[0]) for q in db.query(FAQ.question).all()}
+    gap_set = {
+        normalize(q[0])
+        for q in db.query(KnowledgeGap.question).filter(KnowledgeGap.status == "pending").all()
+        if q[0]
+    }
+
+    merged: dict[str, dict] = {}
+    for content, cnt in raw_rows:
+        key = normalize(content)
+        if not key or key in faq_set:
+            continue
+        if key in merged:
+            merged[key]["count"] += cnt
+        else:
+            merged[key] = {
+                "question": content.strip(),
+                "count": cnt,
+                "has_gap": key in gap_set,
+            }
+
+    result = sorted(merged.values(), key=lambda x: x["count"], reverse=True)[:10]
+    return result
