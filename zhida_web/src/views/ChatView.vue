@@ -31,6 +31,9 @@
         <button v-if="role === 'admin'" class="link" @click="$router.push('/admin/documents')">
           管理后台
         </button>
+        <button v-if="role === 'newbie'" class="link" @click="$router.push('/faq')">
+          新手指南
+        </button>
         <button class="link" @click="onLogout">退出</button>
       </div>
     </header>

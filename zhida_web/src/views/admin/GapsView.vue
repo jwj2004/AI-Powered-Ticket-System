@@ -3,7 +3,7 @@
     <div class="toolbar">
       <div>
         <h2>知识缺口</h2>
-        <p class="muted">待处理缺口榜单 · mock resolve</p>
+        <p class="muted">待处理缺口榜单 · 标记已解决后通知提问者</p>
       </div>
     </div>
 

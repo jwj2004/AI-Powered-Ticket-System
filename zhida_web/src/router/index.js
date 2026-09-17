@@ -10,6 +10,18 @@ import DashboardView from '../views/admin/DashboardView.vue'
 import FaqView from '../views/admin/FaqView.vue'
 import PendingFaqView from '../views/admin/PendingFaqView.vue'
 
+/** 角色可访问路径：ops 仅问答；newbie 问答+FAQ；admin 全部 */
+function canAccess(role, path) {
+  if (role === 'admin') return true
+  if (role === 'newbie') {
+    return path === '/chat' || path === '/faq' || path.startsWith('/faq/')
+  }
+  if (role === 'ops') {
+    return path === '/chat'
+  }
+  return false
+}
+
 const router = createRouter({
   history: createWebHistory(),
   routes: [
@@ -24,6 +36,12 @@ const router = createRouter({
       path: '/chat',
       name: 'chat',
       component: ChatView,
+    },
+    {
+      path: '/faq',
+      name: 'faq',
+      component: FaqView,
+      meta: { roles: ['admin', 'newbie'] },
     },
     {
       path: '/admin',
@@ -56,10 +74,16 @@ router.beforeEach((to) => {
     return { path: '/login', query: { redirect: to.fullPath } }
   }
 
+  // admin 专属后台
   if (to.meta.requiresAdmin || to.path.startsWith('/admin')) {
     if (role !== 'admin') {
       return '/chat'
     }
+    return true
+  }
+
+  if (!canAccess(role, to.path)) {
+    return '/chat'
   }
 
   return true

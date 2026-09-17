@@ -1,38 +1,45 @@
 <template>
-  <div class="panel">
-    <div class="toolbar">
-      <div>
-        <h2>新手指南 FAQ</h2>
-        <p class="muted">管理员可发布 FAQ · mock</p>
+  <div :class="{ 'faq-standalone': standalone }">
+    <header v-if="standalone" class="faq-top">
+      <h1>知答 · 新手指南</h1>
+      <button type="button" class="link" @click="$router.push('/chat')">返回问答</button>
+    </header>
+
+    <div class="panel">
+      <div class="toolbar">
+        <div>
+          <h2>新手指南 FAQ</h2>
+          <p class="muted">{{ isAdmin ? '管理员可发布 FAQ' : '新人入职常见问题' }}</p>
+        </div>
+        <button v-if="isAdmin" type="button" class="btn" @click="openCreate">新建 FAQ</button>
       </div>
-      <button type="button" class="btn" @click="openCreate">新建 FAQ</button>
-    </div>
 
-    <p v-if="error" class="error">{{ error }}</p>
-    <p v-if="okMsg" class="ok">{{ okMsg }}</p>
+      <p v-if="error" class="error">{{ error }}</p>
+      <p v-if="okMsg" class="ok">{{ okMsg }}</p>
 
-    <div v-if="!faq.length" class="empty">暂无 FAQ</div>
-    <div v-for="f in faq" :key="f.id" class="card">
-      <div class="q">{{ f.question }}</div>
-      <div class="a">{{ f.answer }}</div>
-      <div v-if="f.gap_id != null" class="meta">关联 gap_id: {{ f.gap_id }}</div>
-    </div>
+      <div v-if="!faq.length" class="empty">暂无 FAQ</div>
+      <div v-for="f in faq" :key="f.id" class="card">
+        <div class="q">{{ f.question }}</div>
+        <div class="a">{{ f.answer }}</div>
+        <div v-if="f.gap_id != null" class="meta">关联 gap_id: {{ f.gap_id }}</div>
+      </div>
 
-    <div v-if="showModal" class="modal-mask" @click.self="showModal = false">
-      <div class="modal">
-        <h3>新建 FAQ</h3>
-        <label class="label">问题</label>
-        <input v-model="form.question" class="input" placeholder="例如：订单导出超时怎么办？" />
-        <label class="label">答案</label>
-        <textarea v-model="form.answer" class="textarea" rows="5" placeholder="填写标准答复..."></textarea>
-        <label class="label">关联 gap_id（可选）</label>
-        <input v-model="form.gap_id" class="input" placeholder="如 5" />
-        <p v-if="modalError" class="error">{{ modalError }}</p>
-        <div class="modal-actions">
-          <button type="button" class="link-btn" @click="showModal = false">取消</button>
-          <button type="button" class="btn" :disabled="saving" @click="submitCreate">
-            {{ saving ? '发布中...' : '发布' }}
-          </button>
+      <div v-if="showModal" class="modal-mask" @click.self="showModal = false">
+        <div class="modal">
+          <h3>新建 FAQ</h3>
+          <label class="label">问题</label>
+          <input v-model="form.question" class="input" placeholder="例如：订单导出超时怎么办？" />
+          <label class="label">答案</label>
+          <textarea v-model="form.answer" class="textarea" rows="5" placeholder="填写标准答复..."></textarea>
+          <label class="label">关联 gap_id（可选）</label>
+          <input v-model="form.gap_id" class="input" placeholder="如 5" />
+          <p v-if="modalError" class="error">{{ modalError }}</p>
+          <div class="modal-actions">
+            <button type="button" class="link-btn" @click="showModal = false">取消</button>
+            <button type="button" class="btn" :disabled="saving" @click="submitCreate">
+              {{ saving ? '发布中...' : '发布' }}
+            </button>
+          </div>
         </div>
       </div>
     </div>
@@ -40,8 +47,15 @@
 </template>
 
 <script setup>
-import { onMounted, reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref } from 'vue'
+import { useRoute } from 'vue-router'
+import { getRole } from '../../api/authStorage'
 import { listFaq, publishFaq } from '../../api/faq'
+
+const route = useRoute()
+const role = getRole() || ''
+const isAdmin = computed(() => role === 'admin')
+const standalone = computed(() => route.path === '/faq')
 
 const faq = ref([])
 const error = ref('')
@@ -99,6 +113,28 @@ async function submitCreate() {
 </script>
 
 <style scoped>
+.faq-standalone {
+  max-width: 860px;
+  margin: 0 auto;
+  padding: 20px 16px 40px;
+}
+.faq-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+}
+.faq-top h1 {
+  margin: 0;
+  font-size: 20px;
+}
+.faq-top .link {
+  border: none;
+  background: transparent;
+  color: var(--color-primary);
+  cursor: pointer;
+  font-weight: 600;
+}
 .panel {
   background: var(--color-surface);
   border-radius: 12px;

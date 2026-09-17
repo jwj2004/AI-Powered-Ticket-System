@@ -23,7 +23,7 @@
         {{ loading ? '登录中...' : '登录' }}
       </button>
 
-      <p class="hint">mock：admin / zhangsan(ops) / lisi(newbie)，密码均为 123456</p>
+      <p class="hint">admin/admin123、ops/ops123、newbie/newbie123</p>
     </div>
   </div>
 </template>
