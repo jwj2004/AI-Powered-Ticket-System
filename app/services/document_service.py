@@ -81,6 +81,7 @@ def create_document(
     db.add(version)
 
     chunks = split_text(content)
+    chunk_ids = []
     for i, chunk_text in enumerate(chunks):
         chunk = DocumentChunk(
             document_id=doc.id,
@@ -88,18 +89,34 @@ def create_document(
             content=chunk_text,
         )
         db.add(chunk)
+        db.flush()
+        chunk_ids.append(chunk.id)
 
     db.commit()
     db.refresh(doc)
+
+    # 向量化入 FAISS 索引
+    if chunks:
+        from app.services.vector_retriever import VectorRetriever
+        VectorRetriever.add_document_chunks(chunks, chunk_ids)
+
     log.info(f"文档创建: {title} (space={space_id}, chunks={len(chunks)})")
     return doc
 
 
 def delete_document(db: Session, doc_id: int):
+    chunks = db.query(DocumentChunk).filter(DocumentChunk.document_id == doc_id).all()
+    chunk_ids = [c.id for c in chunks]
+
     db.query(DocumentChunk).filter(DocumentChunk.document_id == doc_id).delete()
     db.query(DocVersion).filter(DocVersion.document_id == doc_id).delete()
     db.query(Document).filter(Document.id == doc_id).delete()
     db.commit()
+
+    if chunk_ids:
+        from app.services.vector_retriever import VectorRetriever
+        VectorRetriever.remove_document_chunks(chunk_ids)
+
     log.info(f"文档删除: id={doc_id}")
 
 
@@ -107,6 +124,9 @@ def update_document(db: Session, doc_id: int, content: str):
     doc = db.query(Document).filter(Document.id == doc_id).first()
     if not doc:
         raise ValueError("文档不存在")
+
+    old_chunks = db.query(DocumentChunk).filter(DocumentChunk.document_id == doc_id).all()
+    old_chunk_ids = [c.id for c in old_chunks]
 
     doc.version += 1
     doc.content = content
@@ -120,14 +140,27 @@ def update_document(db: Session, doc_id: int, content: str):
 
     db.query(DocumentChunk).filter(DocumentChunk.document_id == doc_id).delete()
     chunks = split_text(content)
+    chunk_ids = []
     for i, chunk_text in enumerate(chunks):
-        db.add(DocumentChunk(
+        chunk = DocumentChunk(
             document_id=doc_id,
             chunk_index=i,
             content=chunk_text,
-        ))
+        )
+        db.add(chunk)
+        db.flush()
+        chunk_ids.append(chunk.id)
 
     db.commit()
     db.refresh(doc)
+
+    # 重建该文档的向量索引
+    if old_chunk_ids:
+        from app.services.vector_retriever import VectorRetriever
+        VectorRetriever.remove_document_chunks(old_chunk_ids)
+    if chunks:
+        from app.services.vector_retriever import VectorRetriever
+        VectorRetriever.add_document_chunks(chunks, chunk_ids)
+
     log.info(f"文档更新: {doc.title} v{doc.version} (chunks={len(chunks)})")
     return doc

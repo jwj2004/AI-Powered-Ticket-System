@@ -12,6 +12,8 @@ class Settings(BaseSettings):
     embedding_model: str = "BAAI/bge-small-zh-v1.5"
     faiss_index_path: str = "./db/ticket_index.faiss"
     faiss_mapping_path: str = "./db/ticket_id_mapping.json"
+    doc_faiss_index_path: str = "./db/doc_index.faiss"
+    doc_faiss_mapping_path: str = "./db/doc_id_mapping.json"
 
     # 服务
     app_name: str = "知答 MVP - 数据检索服务"

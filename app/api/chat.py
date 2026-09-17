@@ -52,12 +52,43 @@ def chat(
     db.add(user_msg)
     db.flush()
 
-    # TODO(B): LangGraph 编排 → 路由节点 → 检索节点 → 生成节点 → 质量节点
+    # RAG 检索：错误码精确 + 文档块向量 + 工单向量
+    from app.services.vector_retriever import VectorRetriever
+    search_result = VectorRetriever.hybrid_search(req.message, top_k=3)
+
+    # 构建 citations
+    citations = []
+    for chunk in search_result.get("doc_chunks", []):
+        citations.append(Citation(
+            document_id=chunk["document_id"],
+            title=chunk["title"],
+            chunk_index=chunk["chunk_index"],
+        ))
+
+    # 构建回复（B 接入 LLM 后替换此段）
+    reply_parts = []
+
+    if search_result["error_code"] and search_result["solution"]:
+        reply_parts.append(f"**错误码**: {search_result['error_code']}")
+        reply_parts.append(f"**解决方案**: {search_result['solution']}")
+
+    if search_result["doc_chunks"]:
+        reply_parts.append("**相关文档**:")
+        for chunk in search_result["doc_chunks"][:3]:
+            reply_parts.append(f"- [{chunk['title']}] 块{chunk['chunk_index']}: {chunk['content'][:100]}...")
+
+    if search_result["tickets"]:
+        reply_parts.append("**相似工单**:")
+        for t in search_result["tickets"][:2]:
+            reply_parts.append(f"- 工单{t['ticket_id']}: {t['raw_text'][:80]}...")
+
+    reply = "\n".join(reply_parts) if reply_parts else "暂未找到相关信息，已记录为知识缺口。"
+
     assistant_msg = Message(
         conversation_id=conv.id,
         role="assistant",
-        content="[待 B 接入 LLM]",
-        confidence="low",
+        content=reply,
+        confidence=search_result["confidence"],
     )
     db.add(assistant_msg)
     db.commit()
@@ -66,9 +97,9 @@ def chat(
 
     return ChatResponse(
         conversation_id=conv.id,
-        reply=assistant_msg.content,
-        citations=[],
-        confidence=assistant_msg.confidence,
+        reply=reply,
+        citations=citations,
+        confidence=search_result["confidence"],
         message_id=assistant_msg.id,
     )
 
