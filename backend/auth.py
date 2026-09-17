@@ -35,6 +35,7 @@ def find_seed_user(username: str, password: str) -> Optional[dict]:
 def create_access_token(*, user_id: int, username: str, role: str) -> str:
     settings = get_settings()
     now = datetime.now(timezone.utc)
+    # 字段与 A 的 create_access_token 对齐：sub / username / role
     payload = {
         "sub": str(user_id),
         "user_id": user_id,

@@ -29,10 +29,10 @@ class Settings(BaseSettings):
     # B 自己的会话 / 缺口 / 通知库（不碰 A 的 SQLite）
     database_path: str = "./backend/data/zhida_b.db"
 
-    # JWT：与 A 约定同一密钥后可互认 token
-    jwt_secret: str = "zhida-dev-jwt-secret-please-change"
+    # JWT：必须与 A 的 app.core.config.jwt_secret 一致，否则 A 签发的 token 会被 B 判无效
+    jwt_secret: str = "zhida-secret-key-change-in-production"
     jwt_algorithm: str = "HS256"
-    jwt_expire_minutes: int = 720
+    jwt_expire_minutes: int = 1440
 
     # CORS（C 的 Vue 开发地址）
     cors_origins: list[str] = [

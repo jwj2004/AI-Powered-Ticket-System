@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Any, Literal, Optional
 
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel, Field, field_validator
+from pydantic import AliasChoices, BaseModel, ConfigDict, Field, field_validator
 
 from backend.agent.service import run_chat
 from backend.auth import CurrentUser, create_access_token, find_seed_user, get_current_user, require_admin
@@ -21,7 +21,15 @@ class LoginRequest(BaseModel):
 
 
 class ChatRequest(BaseModel):
-    message: str
+    """契约字段为 message。联调期间若前端仍传 query，也映射到 message。"""
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    message: str = Field(
+        ...,
+        validation_alias=AliasChoices("message", "query"),
+        description="用户问题（契约字段名 message）",
+    )
     conversation_id: Optional[int] = None
 
     @field_validator("message")
