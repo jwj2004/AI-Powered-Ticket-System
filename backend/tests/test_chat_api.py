@@ -13,7 +13,7 @@ from backend.config import get_settings
 def client(tmp_path, monkeypatch):
     monkeypatch.setenv("DATABASE_PATH", str(tmp_path / "zhida_b.db"))
     monkeypatch.setenv("USE_MOCK_RETRIEVE", "true")
-    monkeypatch.setenv("JWT_SECRET", "test-secret-please-use-32bytes-min")
+    monkeypatch.setenv("JWT_SECRET", "zhida-jwt-shared-2026")
     monkeypatch.setenv("LLM_API_KEY", "")
     get_settings.cache_clear()
     graph_mod._GRAPH = None

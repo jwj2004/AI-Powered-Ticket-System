@@ -25,6 +25,7 @@
 - 权威文档：`docs/接口契约.md`（v2）、`docs/知答-完整版-开发文档.md`
 - Base URL：`http://127.0.0.1:8000`；Vite：`http://127.0.0.1:5173`
 - 除 `/api/auth/login`、`/api/health` 外，请求头 `Authorization: Bearer <token>`
+- JWT 密钥固定为 `zhida-jwt-shared-2026`，必须与 A 一致，禁止改成别的默认值
 - 字段全部 snake_case；空值用 JSON `null`
 - 错误统一 `{"detail": "..."}` + 4xx/5xx
 - `confidence` 只有 `"high"` / `"low"`

@@ -20,6 +20,7 @@
 - 全部同步 JSON；除 `/api/auth/login` 与 `/api/health` 外需要 `Authorization: Bearer <token>`
 - `confidence` 只有 `high` / `low`；空值用 `null`
 - 角色：`admin` / `ops` / `newbie`
+- JWT 密钥与 A 统一为 `zhida-jwt-shared-2026`（`JWT_SECRET` / `SHARED_JWT_SECRET`），不要另起一套
 
 ## 三、B 对外接口（契约 v2）
 
