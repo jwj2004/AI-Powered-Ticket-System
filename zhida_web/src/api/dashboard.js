@@ -3,7 +3,9 @@ import { MOCK_DASHBOARD, MOCK_GAPS } from './mock/data'
 
 /**
  * GET /api/dashboard
- * 后端新结构：questions / documents / gaps / top_questions / conversations
+ * 兼容两种结构：
+ * 1) 嵌套：questions / documents / gaps / conversations
+ * 2) 扁平：total_today / hit_rate / doc_count / pending_gaps / top_questions
  * 对外统一成页面用的扁平字段
  */
 export async function getDashboard() {
@@ -17,22 +19,23 @@ export async function getDashboard() {
   const docs = data?.documents || {}
   const gaps = data?.gaps || {}
   const conv = data?.conversations || {}
-  const conf = q.confidence_distribution || {}
+  const conf = q.confidence_distribution || data?.confidence_distribution || {}
 
-  // 命中率：后端为 0–1
-  const rawHit = Number(q.hit_rate)
+  // 命中率：可能是 0–1 或 0–100
+  const rawHit = Number(q.hit_rate ?? data?.hit_rate)
   const hitRate = Number.isNaN(rawHit) ? 0 : rawHit > 1 ? rawHit / 100 : rawHit
 
-  // Top：title + message_count → question + count
+  // Top：兼容 title/message_count 与 question/count
   const top_questions = (data?.top_questions || []).map((t) => ({
-    question: t.title || t.question || `会话#${t.conversation_id ?? ''}`,
-    count: t.message_count ?? t.count ?? 0,
+    question: t.question || t.title || `会话#${t.conversation_id ?? ''}`,
+    count: t.count ?? t.message_count ?? 0,
   }))
 
-  // 无 daily_trend：用置信度分布做柱图数据
+  // 无 daily_trend：优先置信度分布，否则会话概览
   const confEntries = Object.entries(conf)
-  const daily_trend =
-    confEntries.length > 0
+  const daily_trend = Array.isArray(data?.daily_trend) && data.daily_trend.length
+    ? data.daily_trend
+    : confEntries.length > 0
       ? confEntries.map(([date, count]) => ({ date: String(date), count: Number(count) || 0 }))
       : [
           { date: '今日会话', count: conv.today ?? 0 },
@@ -40,13 +43,20 @@ export async function getDashboard() {
           { date: '全部会话', count: conv.total ?? 0 },
         ]
 
+  const hasConfChart = confEntries.length > 0
+  const hasDaily = Array.isArray(data?.daily_trend) && data.daily_trend.length > 0
+
   return {
-    total_today: q.total_today ?? 0,
+    total_today: q.total_today ?? data?.total_today ?? 0,
     hit_rate: hitRate,
-    doc_count: docs.total ?? 0,
-    pending_gaps: gaps.pending ?? 0,
+    doc_count: docs.total ?? data?.doc_count ?? 0,
+    pending_gaps: gaps.pending ?? data?.pending_gaps ?? 0,
     top_questions,
     daily_trend,
-    chart_trend_title: confEntries.length > 0 ? '置信度分布' : '会话概览',
+    chart_trend_title: hasDaily
+      ? '近7日趋势'
+      : hasConfChart
+        ? '置信度分布'
+        : '会话概览',
   }
 }
