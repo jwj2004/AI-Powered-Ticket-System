@@ -19,6 +19,7 @@ from app.services.document_service import (
     update_document,
     rollback_document,
 )
+from app.api.doc_spaces import filter_spaces_by_role
 
 router = APIRouter(prefix="/api/documents", tags=["文档管理"])
 
@@ -48,6 +49,13 @@ def list_documents(
     if space_id:
         q = q.filter(Document.space_id == space_id)
     rows = q.order_by(Document.updated_at.desc()).all()
+
+    # 按角色过滤空间
+    spaces = [space for _, space in rows]
+    if user.role != "admin":
+        visible_space_ids = {s.id for s in filter_spaces_by_role(spaces, user.role)}
+        rows = [(doc, space) for doc, space in rows if space.id in visible_space_ids]
+
     result = []
     for doc, space in rows:
         owner_name = ""
@@ -77,6 +85,14 @@ def get_document(
     doc = db.query(Document).filter(Document.id == doc_id).first()
     if not doc:
         raise HTTPException(status_code=404, detail="文档不存在")
+
+    # 检查空间权限
+    space = db.query(DocSpace).filter(DocSpace.id == doc.space_id).first()
+    if space and user.role != "admin":
+        visible = filter_spaces_by_role([space], user.role)
+        if not visible:
+            raise HTTPException(status_code=403, detail="无权访问此文档")
+
     doc.view_count = (doc.view_count or 0) + 1
     db.commit()
     return {

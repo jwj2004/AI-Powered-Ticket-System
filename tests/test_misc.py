@@ -355,3 +355,95 @@ class TestGapMerge:
         db_session.commit()
         r = client.post(f"/api/gaps/{g1.id}/merge", json={"target_gap_id": g2.id}, headers=newbie_headers)
         assert r.status_code == 403
+
+
+class TestRoleIsolation:
+    def test_admin_sees_all_spaces(self, client, admin_headers, db_session):
+        from app.models.doc_space import DocSpace
+        db_session.add_all([
+            DocSpace(name="全员空间", role="all"),
+            DocSpace(name="运维空间", role="ops"),
+            DocSpace(name="新手空间", role="newbie"),
+            DocSpace(name="管理空间", role="admin"),
+        ])
+        db_session.commit()
+        r = client.get("/api/doc-spaces", headers=admin_headers)
+        assert r.status_code == 200
+        assert len(r.json()) == 4
+
+    def test_ops_sees_all_and_ops(self, client, ops_headers, db_session):
+        from app.models.doc_space import DocSpace
+        db_session.add_all([
+            DocSpace(name="全员空间2", role="all"),
+            DocSpace(name="运维空间2", role="ops"),
+            DocSpace(name="新手空间2", role="newbie"),
+            DocSpace(name="管理空间2", role="admin"),
+        ])
+        db_session.commit()
+        r = client.get("/api/doc-spaces", headers=ops_headers)
+        assert r.status_code == 200
+        names = [s["name"] for s in r.json()]
+        assert "全员空间2" in names
+        assert "运维空间2" in names
+        assert "新手空间2" not in names
+        assert "管理空间2" not in names
+
+    def test_newbie_sees_all_and_newbie(self, client, newbie_headers, db_session):
+        from app.models.doc_space import DocSpace
+        db_session.add_all([
+            DocSpace(name="全员空间3", role="all"),
+            DocSpace(name="运维空间3", role="ops"),
+            DocSpace(name="新手空间3", role="newbie"),
+            DocSpace(name="管理空间3", role="admin"),
+        ])
+        db_session.commit()
+        r = client.get("/api/doc-spaces", headers=newbie_headers)
+        assert r.status_code == 200
+        names = [s["name"] for s in r.json()]
+        assert "全员空间3" in names
+        assert "新手空间3" in names
+        assert "运维空间3" not in names
+        assert "管理空间3" not in names
+
+    def test_ops_cannot_access_newbie_doc(self, client, ops_headers, admin_headers, db_session):
+        from app.models.doc_space import DocSpace
+        from app.models.document import Document
+        space = DocSpace(name="新手专属", role="newbie")
+        db_session.add(space)
+        db_session.commit()
+        doc = Document(space_id=space.id, title="新手文档", content="content", content_type="txt", version=1, owner_id=1)
+        db_session.add(doc)
+        db_session.commit()
+        r = client.get(f"/api/documents/{doc.id}", headers=ops_headers)
+        assert r.status_code == 403
+
+    def test_admin_can_access_any_doc(self, client, admin_headers, db_session):
+        from app.models.doc_space import DocSpace
+        from app.models.document import Document
+        space = DocSpace(name="管理专属", role="admin")
+        db_session.add(space)
+        db_session.commit()
+        doc = Document(space_id=space.id, title="管理文档", content="content", content_type="txt", version=1, owner_id=1)
+        db_session.add(doc)
+        db_session.commit()
+        r = client.get(f"/api/documents/{doc.id}", headers=admin_headers)
+        assert r.status_code == 200
+
+    def test_newbie_cannot_access_ops_doc(self, client, newbie_headers, admin_headers, db_session):
+        from app.models.doc_space import DocSpace
+        from app.models.document import Document
+        space = DocSpace(name="运维专属", role="ops")
+        db_session.add(space)
+        db_session.commit()
+        doc = Document(space_id=space.id, title="运维文档", content="content", content_type="txt", version=1, owner_id=1)
+        db_session.add(doc)
+        db_session.commit()
+        r = client.get(f"/api/documents/{doc.id}", headers=newbie_headers)
+        assert r.status_code == 403
+
+    def test_create_space_with_role(self, client, admin_headers, db_session):
+        r = client.post("/api/doc-spaces", json={"name": "测试角色空间", "role": "ops"}, headers=admin_headers)
+        assert r.status_code == 200
+        spaces = client.get("/api/doc-spaces", headers=admin_headers).json()
+        created = [s for s in spaces if s["name"] == "测试角色空间"][0]
+        assert created["role"] == "ops"

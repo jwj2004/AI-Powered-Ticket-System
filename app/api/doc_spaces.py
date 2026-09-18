@@ -14,11 +14,19 @@ router = APIRouter(prefix="/api/doc-spaces", tags=["文档空间"])
 class SpaceCreate(BaseModel):
     name: str
     description: Optional[str] = None
+    role: Optional[str] = "all"
 
 
 class SpaceUpdate(BaseModel):
     name: Optional[str] = None
     description: Optional[str] = None
+    role: Optional[str] = None
+
+
+def filter_spaces_by_role(spaces, user_role: str):
+    if user_role == "admin":
+        return spaces
+    return [s for s in spaces if s.role in ("all", user_role)]
 
 
 @router.get("")
@@ -27,9 +35,10 @@ def list_spaces(
     user: User = Depends(get_current_user),
 ):
     spaces = db.query(DocSpace).all()
+    visible = filter_spaces_by_role(spaces, user.role)
     return [
-        {"id": s.id, "name": s.name, "description": s.description or ""}
-        for s in spaces
+        {"id": s.id, "name": s.name, "description": s.description or "", "role": s.role or "all"}
+        for s in visible
     ]
 
 
@@ -42,7 +51,7 @@ def create_space(
     existing = db.query(DocSpace).filter(DocSpace.name == req.name).first()
     if existing:
         raise HTTPException(status_code=400, detail="空间名已存在")
-    space = DocSpace(name=req.name, description=req.description)
+    space = DocSpace(name=req.name, description=req.description, role=req.role or "all")
     db.add(space)
     db.commit()
     db.refresh(space)
@@ -63,6 +72,8 @@ def update_space(
         space.name = req.name
     if req.description is not None:
         space.description = req.description
+    if req.role is not None:
+        space.role = req.role
     db.commit()
     return {"ok": True}
 
