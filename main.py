@@ -21,6 +21,7 @@ from app.api import (
     notifications,
     dashboard,
     faq,
+    logs,
 )
 
 app = FastAPI(
@@ -48,6 +49,7 @@ app.include_router(notifications.router)
 app.include_router(dashboard.router)
 app.include_router(faq.router)
 app.include_router(lookup_retrieve.router)
+app.include_router(logs.router)
 
 
 @app.get("/api/health")

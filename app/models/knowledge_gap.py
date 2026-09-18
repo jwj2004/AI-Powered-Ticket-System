@@ -15,3 +15,4 @@ class KnowledgeGap(Base):
     resolved_by = Column(Integer, ForeignKey("user.id"), comment="补答案的管理员")
     resolved_at = Column(DateTime, comment="解决时间")
     created_at = Column(DateTime, server_default=func.now(), comment="创建时间")
+    question_count = Column(Integer, default=1, comment="相同问题出现次数")

@@ -62,6 +62,8 @@ def list_documents(
             "version": doc.version,
             "updated_at": doc.updated_at.isoformat() if doc.updated_at else "",
             "owner": owner_name,
+            "approved": doc.approved,
+            "view_count": doc.view_count or 0,
         })
     return result
 
@@ -75,12 +77,16 @@ def get_document(
     doc = db.query(Document).filter(Document.id == doc_id).first()
     if not doc:
         raise HTTPException(status_code=404, detail="文档不存在")
+    doc.view_count = (doc.view_count or 0) + 1
+    db.commit()
     return {
         "id": doc.id,
         "title": doc.title,
         "content": doc.content or "",
         "space_id": doc.space_id,
         "version": doc.version,
+        "approved": doc.approved,
+        "view_count": doc.view_count,
     }
 
 
@@ -169,3 +175,31 @@ def rollback_document_api(
         return {"id": doc.id, "version": doc.version, "title": doc.title}
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
+
+
+@router.post("/{doc_id}/approve")
+def approve_document(
+    doc_id: int,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_admin),
+):
+    doc = db.query(Document).filter(Document.id == doc_id).first()
+    if not doc:
+        raise HTTPException(status_code=404, detail="文档不存在")
+    doc.approved = True
+    db.commit()
+    return {"ok": True}
+
+
+@router.post("/{doc_id}/reject")
+def reject_document(
+    doc_id: int,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_admin),
+):
+    doc = db.query(Document).filter(Document.id == doc_id).first()
+    if not doc:
+        raise HTTPException(status_code=404, detail="文档不存在")
+    doc.approved = False
+    db.commit()
+    return {"ok": True}

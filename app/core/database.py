@@ -36,7 +36,7 @@ def init_db():
     from app.models import (  # noqa: F401
         error_code, customer_asset, ticket, query_log, vector_index_meta,
         user, doc_space, document, document_chunk, conversation, message,
-        feedback, knowledge_gap, notification, doc_version,
+        feedback, knowledge_gap, notification, doc_version, operation_log,
     )
     log.info("正在创建数据库表...")
     Base.metadata.create_all(bind=engine)
