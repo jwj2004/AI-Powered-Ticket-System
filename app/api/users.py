@@ -29,3 +29,73 @@ def create_new_user(
         return {"id": new_user.id, "ok": True}
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.get("/pending")
+def list_pending(
+    db: Session = Depends(get_db),
+    user: User = Depends(require_admin),
+):
+    pending_users = (
+        db.query(User)
+        .filter(User.status == "pending")
+        .order_by(User.created_at.desc())
+        .all()
+    )
+    return [
+        {
+            "id": u.id,
+            "username": u.username,
+            "role": u.role,
+            "created_at": u.created_at.isoformat() if u.created_at else "",
+        }
+        for u in pending_users
+    ]
+
+
+@router.post("/{user_id}/approve")
+def approve_user(
+    user_id: int,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_admin),
+):
+    target = db.query(User).filter(User.id == user_id).first()
+    if not target:
+        raise HTTPException(status_code=404, detail="用户不存在")
+    if target.status != "pending":
+        raise HTTPException(status_code=400, detail=f"用户状态为 {target.status}，无法审核")
+    target.status = "active"
+    db.commit()
+    return {"ok": True}
+
+
+@router.post("/{user_id}/reject")
+def reject_user(
+    user_id: int,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_admin),
+):
+    target = db.query(User).filter(User.id == user_id).first()
+    if not target:
+        raise HTTPException(status_code=404, detail="用户不存在")
+    if target.status != "pending":
+        raise HTTPException(status_code=400, detail=f"用户状态为 {target.status}，无法拒绝")
+    target.status = "rejected"
+    db.commit()
+    return {"ok": True}
+
+
+@router.post("/{user_id}/make-admin")
+def make_admin(
+    user_id: int,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_admin),
+):
+    if user_id == user.id:
+        raise HTTPException(status_code=400, detail="不能修改自己的角色")
+    target = db.query(User).filter(User.id == user_id).first()
+    if not target:
+        raise HTTPException(status_code=404, detail="用户不存在")
+    target.role = "admin"
+    db.commit()
+    return {"ok": True}
