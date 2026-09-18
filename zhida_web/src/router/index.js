@@ -11,6 +11,9 @@ import DashboardView from '../views/admin/DashboardView.vue'
 import FaqView from '../views/admin/FaqView.vue'
 import PendingFaqView from '../views/admin/PendingFaqView.vue'
 import UsersView from '../views/admin/UsersView.vue'
+import SpacesView from '../views/admin/SpacesView.vue'
+import LogsView from '../views/admin/LogsView.vue'
+import ApprovalsView from '../views/admin/ApprovalsView.vue'
 
 /** 角色可访问路径：ops 仅问答；newbie 问答+FAQ；admin 全部 */
 function canAccess(role, path) {
@@ -58,11 +61,14 @@ const router = createRouter({
       redirect: '/admin/documents',
       children: [
         { path: 'documents', name: 'admin-documents', component: DocumentsView },
+        { path: 'approvals', name: 'admin-approvals', component: ApprovalsView },
+        { path: 'spaces', name: 'admin-spaces', component: SpacesView },
         { path: 'gaps', name: 'admin-gaps', component: GapsView },
         { path: 'dashboard', name: 'admin-dashboard', component: DashboardView },
         { path: 'pending-faq', name: 'admin-pending-faq', component: PendingFaqView },
         { path: 'faq', name: 'admin-faq', component: FaqView },
         { path: 'users', name: 'admin-users', component: UsersView },
+        { path: 'logs', name: 'admin-logs', component: LogsView },
       ],
     },
   ],

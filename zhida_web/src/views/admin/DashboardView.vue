@@ -28,14 +28,18 @@
       </div>
     </div>
 
-    <div v-if="data" class="charts">
-      <div class="chart-box">
+    <div v-if="data || citeTop.length" class="charts">
+      <div v-if="data" class="chart-box">
         <div class="chart-title">{{ data.chart_trend_title || '置信度分布' }}</div>
         <div ref="trendEl" class="chart"></div>
       </div>
-      <div class="chart-box">
+      <div v-if="data" class="chart-box">
         <div class="chart-title">热门问题 Top 5</div>
         <div ref="topEl" class="chart"></div>
+      </div>
+      <div v-if="citeTop.length" class="chart-box cite-box">
+        <div class="chart-title">文档引用 Top5</div>
+        <div ref="citeEl" class="chart"></div>
       </div>
     </div>
   </div>
@@ -45,14 +49,18 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 import * as echarts from 'echarts'
 import { getDashboard } from '../../api/dashboard'
+import { getCitationTop } from '../../api/stats'
 
 const data = ref(null)
+const citeTop = ref([])
 const error = ref('')
 const trendEl = ref(null)
 const topEl = ref(null)
+const citeEl = ref(null)
 
 let trendChart = null
 let topChart = null
+let citeChart = null
 
 const hitRateText = computed(() => {
   if (!data.value) return '-'
@@ -62,8 +70,7 @@ const hitRateText = computed(() => {
 })
 
 function renderCharts() {
-  if (!data.value) return
-
+  if (data.value) {
   const trend = data.value.daily_trend || []
   const tops = (data.value.top_questions || []).slice(0, 5)
 
@@ -113,16 +120,50 @@ function renderCharts() {
       ],
     })
   }
+  }
+
+  if (citeEl.value) {
+    if (!citeChart) citeChart = echarts.init(citeEl.value)
+    const rows = [...citeTop.value].reverse()
+    citeChart.setOption({
+      grid: { left: 140, right: 30, top: 20, bottom: 20 },
+      tooltip: { trigger: 'axis' },
+      xAxis: { type: 'value', minInterval: 1 },
+      yAxis: {
+        type: 'category',
+        data: rows.map((d) => d.title),
+        axisLabel: { width: 120, overflow: 'truncate' },
+      },
+      series: [
+        {
+          name: '引用次数',
+          type: 'bar',
+          data: rows.map((d) => d.citation_count),
+          itemStyle: { color: '#ca8a04', borderRadius: [0, 4, 4, 0] },
+          barWidth: 16,
+        },
+      ],
+    })
+  }
 }
 
 function onResize() {
   trendChart?.resize()
   topChart?.resize()
+  citeChart?.resize()
 }
 
 onMounted(async () => {
   try {
-    data.value = await getDashboard()
+    const [dash, cites] = await Promise.all([
+      getDashboard().catch((e) => {
+        error.value = e.detail || e.message || '加载看板失败'
+        return null
+      }),
+      getCitationTop(5),
+    ])
+    data.value = dash
+    citeTop.value = cites
     await nextTick()
     renderCharts()
     window.addEventListener('resize', onResize)
@@ -135,8 +176,10 @@ onBeforeUnmount(() => {
   window.removeEventListener('resize', onResize)
   trendChart?.dispose()
   topChart?.dispose()
+  citeChart?.dispose()
   trendChart = null
   topChart = null
+  citeChart = null
 })
 </script>
 
@@ -183,6 +226,7 @@ h2 { margin: 0 0 4px; font-size: 18px; }
   grid-template-columns: 1.2fr 1fr;
   gap: 14px;
 }
+.cite-box { grid-column: 1 / -1; }
 .chart-box {
   background: var(--color-surface, #fff);
   border: 1px solid var(--color-border, #e5e7eb);

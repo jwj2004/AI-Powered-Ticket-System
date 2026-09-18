@@ -97,7 +97,9 @@
             <td>{{ u.username }}</td>
             <td>{{ u.role }}</td>
             <td>
-              <span class="status active">{{ u.status || 'active' }}</span>
+              <span class="status" :class="u.status === 'disabled' ? 'disabled' : 'active'">
+                {{ u.status === 'disabled' ? '已禁用' : (u.status || 'active') }}
+              </span>
             </td>
             <td class="ops">
               <button
@@ -109,7 +111,17 @@
               >
                 ↑ 升级为管理员
               </button>
-              <span v-else class="muted-inline">—</span>
+              <button
+                v-if="u.username !== me && u.status !== 'disabled'"
+                type="button"
+                class="action-btn danger"
+                :disabled="busyId === u.id"
+                @click="onDisable(u)"
+              >
+                禁用
+              </button>
+              <span v-if="u.status === 'disabled'" class="muted-inline">已禁用</span>
+              <span v-else-if="u.username === me" class="muted-inline">当前账号</span>
             </td>
           </tr>
         </tbody>
@@ -127,6 +139,7 @@ import {
   approveUser,
   rejectUser,
   makeAdmin,
+  disableUser,
 } from '../../api/users'
 
 const me = getUsername() || ''
@@ -210,6 +223,26 @@ async function onMakeAdmin(u) {
   try {
     await makeAdmin(u.id)
     okMsg.value = `${u.username} 已升级为管理员`
+    await loadActive()
+  } catch (e) {
+    error.value = e.detail || e.message || '操作失败'
+  } finally {
+    busyId.value = null
+  }
+}
+
+async function onDisable(u) {
+  if (u.username === me) {
+    error.value = '不能禁用当前登录账号'
+    return
+  }
+  if (!confirm(`确认禁用「${u.username}」？`)) return
+  busyId.value = u.id
+  error.value = ''
+  okMsg.value = ''
+  try {
+    await disableUser(u.id)
+    okMsg.value = `已禁用 ${u.username}`
     await loadActive()
   } catch (e) {
     error.value = e.detail || e.message || '操作失败'
@@ -320,6 +353,7 @@ tbody tr:hover { background: #eff6ff; }
   font-size: 12px;
 }
 .status.active { background: #ecfdf5; color: var(--color-success); }
+.status.disabled { background: #fef2f2; color: var(--color-danger); }
 
 .error { color: var(--color-danger); }
 .ok { color: var(--color-success); }

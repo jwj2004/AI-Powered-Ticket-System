@@ -19,18 +19,20 @@
             <th>所属空间</th>
             <th>版本</th>
             <th>更新时间</th>
+            <th>引用次数</th>
             <th>操作</th>
           </tr>
         </thead>
         <tbody>
           <tr v-if="!docs.length">
-            <td colspan="5" class="empty">暂无文档</td>
+            <td colspan="6" class="empty">暂无文档</td>
           </tr>
           <tr v-for="d in docs" :key="d.id" :class="{ stale: isStale(d.updated_at) }">
             <td>{{ d.title }}</td>
             <td>{{ d.space }}</td>
             <td>v{{ d.version }}</td>
             <td>{{ formatTime(d.updated_at) }}</td>
+            <td>{{ d.citation_count ?? 0 }}</td>
             <td class="ops">
               <button type="button" class="action-btn" @click="openPreview(d)">👁 预览</button>
               <button type="button" class="action-btn" @click="openVersions(d)">🕘 历史</button>
@@ -150,6 +152,7 @@ import {
   getDocumentVersion,
 } from '../../api/documents'
 import { listDocSpaces } from '../../api/auth'
+import { withCitationCounts } from '../../api/stats'
 import RichTextEditor from '../../components/RichTextEditor.vue'
 import { renderDocContent } from '../../utils/renderContent'
 
@@ -220,7 +223,7 @@ function toEditorHtml(content) {
 async function refresh() {
   error.value = ''
   try {
-    docs.value = await listDocuments()
+    docs.value = withCitationCounts(await listDocuments())
   } catch (e) {
     error.value = e.detail || e.message || '加载文档失败'
   }

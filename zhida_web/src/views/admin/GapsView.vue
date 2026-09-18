@@ -32,7 +32,7 @@
             <td>
               <span class="status" :class="g.status">{{ g.status }}</span>
             </td>
-            <td>
+            <td class="ops">
               <button
                 v-if="g.status === 'pending'"
                 type="button"
@@ -42,7 +42,8 @@
               >
                 ✓ 处理
               </button>
-              <span v-else class="muted">已处理</span>
+              <button type="button" class="action-btn" @click="openMerge(g)">合并</button>
+              <span v-if="g.status !== 'pending'" class="muted">已处理</span>
             </td>
           </tr>
         </tbody>
@@ -72,12 +73,37 @@
         </div>
       </div>
     </div>
+
+    <div v-if="showMerge" class="modal-mask" @click.self="showMerge = false">
+      <div class="modal">
+        <h3>合并知识缺口 #{{ mergeSource?.gap_id }}</h3>
+        <p class="q">{{ mergeSource?.question }}</p>
+        <label class="label">合并到</label>
+        <select v-model="mergeTargetId" class="select">
+          <option :value="null">请选择另一个缺口</option>
+          <option
+            v-for="g in mergeOptions"
+            :key="g.gap_id"
+            :value="g.gap_id"
+          >
+            #{{ g.gap_id }} {{ g.question }}
+          </option>
+        </select>
+        <p v-if="mergeError" class="error">{{ mergeError }}</p>
+        <div class="modal-actions">
+          <button type="button" class="link-btn" @click="showMerge = false">取消</button>
+          <button type="button" class="btn" :disabled="merging" @click="submitMerge">
+            {{ merging ? '合并中...' : '确认合并' }}
+          </button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
 <script setup>
-import { onMounted, reactive, ref } from 'vue'
-import { listGaps, resolveGap } from '../../api/gaps'
+import { computed, onMounted, reactive, ref } from 'vue'
+import { listGaps, resolveGap, mergeGaps } from '../../api/gaps'
 import { listDocuments } from '../../api/documents'
 
 const gaps = ref([])
@@ -93,6 +119,12 @@ const form = reactive({
   answer: '',
   document_id: null,
 })
+
+const showMerge = ref(false)
+const merging = ref(false)
+const mergeError = ref('')
+const mergeSource = ref(null)
+const mergeTargetId = ref(null)
 
 function formatTime(iso) {
   if (!iso) return ''
@@ -122,6 +154,36 @@ function openResolve(g) {
   form.document_id = null
   modalError.value = ''
   showModal.value = true
+}
+
+function openMerge(g) {
+  mergeSource.value = g
+  mergeTargetId.value = null
+  mergeError.value = ''
+  showMerge.value = true
+}
+
+const mergeOptions = computed(() =>
+  gaps.value.filter((g) => g.gap_id !== mergeSource.value?.gap_id),
+)
+
+async function submitMerge() {
+  mergeError.value = ''
+  if (mergeTargetId.value == null) {
+    mergeError.value = '请选择另一个缺口'
+    return
+  }
+  merging.value = true
+  try {
+    await mergeGaps(mergeSource.value.gap_id, mergeTargetId.value)
+    showMerge.value = false
+    okMsg.value = `已将缺口 #${mergeSource.value.gap_id} 合并到 #${mergeTargetId.value}`
+    await refresh()
+  } catch (e) {
+    mergeError.value = e.detail || e.message || '合并失败'
+  } finally {
+    merging.value = false
+  }
 }
 
 async function submitResolve() {
@@ -194,6 +256,7 @@ tbody tr:hover { background: #eff6ff; }
   padding: 4px 10px;
 }
 .action-btn:hover { background: var(--color-primary-soft); border-color: var(--color-primary-muted); }
+.ops { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
 .link-btn {
   border: none;
   background: transparent;

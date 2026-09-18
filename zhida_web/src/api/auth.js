@@ -1,10 +1,11 @@
 import { USE_MOCK, request } from './http'
-import { setAuth } from './authStorage'
+import { setAuth, getUsername } from './authStorage'
 import {
   MOCK_USERS,
   MOCK_DOC_SPACES,
   MOCK_PENDING_USERS,
   mockNextUserId,
+  pushMockLog,
 } from './mock/data'
 
 /** POST /api/auth/login */
@@ -102,6 +103,36 @@ export async function createUser({ username, password, role }) {
     method: 'POST',
     body: JSON.stringify({ username, password, role }),
   })
+}
+
+/**
+ * POST /api/auth/change-password
+ * 后端未就绪，固定走 mock，不请求真接口
+ * body: { old_password, new_password }
+ */
+export async function changePassword({ old_password, new_password }) {
+  const oldPwd = String(old_password || '')
+  const nextPwd = String(new_password || '')
+  if (!oldPwd || !nextPwd) {
+    const err = new Error('请填写旧密码和新密码')
+    err.detail = '请填写旧密码和新密码'
+    throw err
+  }
+  if (nextPwd.length < 6) {
+    const err = new Error('新密码至少 6 位')
+    err.detail = '新密码至少 6 位'
+    throw err
+  }
+  if (oldPwd === nextPwd) {
+    const err = new Error('新密码不能与旧密码相同')
+    err.detail = '新密码不能与旧密码相同'
+    throw err
+  }
+  const name = getUsername()
+  const user = name ? MOCK_USERS[name] : null
+  if (user) user.password = nextPwd
+  pushMockLog({ operator: name || 'admin', action: '修改密码', detail: name || '' })
+  return { ok: true }
 }
 
 /** GET /api/doc-spaces */

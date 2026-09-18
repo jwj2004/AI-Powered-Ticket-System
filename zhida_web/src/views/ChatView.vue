@@ -34,6 +34,7 @@
         <button v-if="role === 'newbie'" class="link" @click="$router.push('/faq')">
           新手指南
         </button>
+        <UserMenu />
         <button class="link" @click="onLogout">退出</button>
       </div>
     </header>
@@ -201,6 +202,7 @@ import { getUsername, getRole, clearAuth } from '../api/authStorage'
 import { chat, sendFeedback, getCitationChunk, listConversations, listMessages } from '../api/chat'
 import { listNotifications, markNotificationRead } from '../api/notifications'
 import { typewrite } from '../utils/typewriter'
+import UserMenu from '../components/UserMenu.vue'
 
 const router = useRouter()
 const username = getUsername() || ''
