@@ -17,6 +17,7 @@ from app.services.document_service import (
     create_document,
     delete_document,
     update_document,
+    rollback_document,
 )
 
 router = APIRouter(prefix="/api/documents", tags=["文档管理"])
@@ -26,6 +27,10 @@ class UpdateRequest(BaseModel):
     title: Optional[str] = None
     content: str
     space_id: Optional[int] = None
+
+
+class RollbackRequest(BaseModel):
+    target_version: int
 
 
 class VersionResponse(BaseModel):
@@ -150,3 +155,17 @@ def list_versions(
         VersionResponse(version=v.version, created_at=v.created_at.isoformat() if v.created_at else "")
         for v in versions
     ]
+
+
+@router.post("/{doc_id}/rollback")
+def rollback_document_api(
+    doc_id: int,
+    req: RollbackRequest,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_admin),
+):
+    try:
+        doc = rollback_document(db, doc_id, req.target_version)
+        return {"id": doc.id, "version": doc.version, "title": doc.title}
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
