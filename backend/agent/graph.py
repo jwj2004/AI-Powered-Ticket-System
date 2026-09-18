@@ -1,4 +1,4 @@
-"""LangGraph 五节点：路由 → 检索/直查 → 生成 → 质量（缺口）→ 结束；赞踩走独立接口。"""
+"""LangGraph 五节点：路由 → 检索 → 生成 → 质量 → 反馈。"""
 
 from __future__ import annotations
 
@@ -10,6 +10,7 @@ from openai import OpenAI
 from backend.agent import prompts, rules
 from backend.clients.retrieve_client import RetrieveClient, extract_error_code
 from backend.config import Settings, get_settings
+from backend import store
 
 logger = logging.getLogger(__name__)
 
@@ -28,38 +29,45 @@ class AgentState(TypedDict, total=False):
     confidence: str
     gap_id: Optional[int]
     create_gap: bool
+    persist_gap: bool
+    awaiting_feedback: bool
+
+
+def _patch_langchain_debug() -> None:
+    """当前环境 langchain.debug 缺失会导致 Graph.invoke 直接崩，补上后再走 LangGraph。"""
+    try:
+        import langchain
+
+        if not hasattr(langchain, "debug"):
+            langchain.debug = False
+    except ImportError:
+        return
 
 
 def _client() -> RetrieveClient:
     return RetrieveClient(get_settings())
 
 
-def route_node(state: AgentState) -> AgentState:
+def route_node(state: AgentState) -> dict[str, Any]:
+    """路由：结构化直查 / RAG / 闲聊拒答。"""
     question = state.get("message") or ""
-    code = extract_error_code(question)
-    if code:
-        state["route_kind"] = "lookup"
-        return state
-    state["route_kind"] = rules.classify_route(question)
-    return state
+    kind = rules.classify_route(question)
+    return {"route_kind": kind}
 
 
-def lookup_node(state: AgentState) -> AgentState:
-    question = state.get("message") or ""
-    code = extract_error_code(question)
-    found = _client().lookup(code) if code else None
-    state["lookup"] = found
-    if not found:
-        state["route_kind"] = "rag"
-    return state
-
-
-def retrieve_node(state: AgentState) -> AgentState:
+def retrieve_node(state: AgentState) -> dict[str, Any]:
+    """检索：错误码直查优先，否则向量召回 top5。"""
     question = state.get("message") or ""
     role = state.get("role") or "ops"
-    chunks = _client().retrieve_chunks(question, role=role, top_k=5)
-    state["chunks"] = chunks
-    return state
+    client = _client()
+    lookup = None
+    if state.get("route_kind") == "lookup":
+        code = extract_error_code(question)
+        lookup = client.lookup(code) if code else None
+    chunks: list[dict[str, Any]] = []
+    if not lookup:
+        chunks = client.retrieve_chunks(question, role=role, top_k=5)
+    return {"lookup": lookup, "chunks": chunks}
 
 
 def _llm_generate(messages: list[dict[str, str]], settings: Settings, fallback: str) -> str:
@@ -100,7 +108,8 @@ def _template_from_chunks(chunks: list[dict[str, Any]]) -> str:
     return "\n".join(parts)
 
 
-def generate_node(state: AgentState) -> AgentState:
+def generate_node(state: AgentState) -> dict[str, Any]:
+    """生成：只根据 lookup / 文档块拼证据写回答。"""
     settings = get_settings()
     question = state.get("message") or ""
     history = state.get("history") or []
@@ -111,118 +120,116 @@ def generate_node(state: AgentState) -> AgentState:
         messages = prompts.build_lookup_prompt(
             question=question, lookup=lookup, history=history
         )
-        fallback = _template_from_lookup(lookup)
-        state["reply"] = _llm_generate(messages, settings, fallback)
-        return state
+        return {"reply": _llm_generate(messages, settings, _template_from_lookup(lookup))}
 
     if chunks:
         messages = prompts.build_rag_prompt(
             question=question, chunks=chunks, history=history
         )
-        fallback = _template_from_chunks(chunks)
-        state["reply"] = _llm_generate(messages, settings, fallback)
-        return state
+        return {"reply": _llm_generate(messages, settings, _template_from_chunks(chunks))}
 
-    state["reply"] = ""
-    return state
+    return {"reply": ""}
 
 
-def quality_node(state: AgentState) -> AgentState:
-    """证据充分才输出生成结果；否则固定拒答文案，并标记需要记缺口。"""
+def quality_node(state: AgentState) -> dict[str, Any]:
+    """质量：证据不足则不硬答，并按需写入 knowledge_gap。"""
     lookup = state.get("lookup")
     chunks = state.get("chunks") or []
     route = state.get("route_kind") or ""
 
     if route == "refuse":
-        state["confidence"] = "low"
-        state["reply"] = rules.REFUSE_MESSAGE
-        state["citations"] = []
-        state["gap_id"] = None
-        state["create_gap"] = False
-        return state
+        return {
+            "confidence": "low",
+            "reply": rules.REFUSE_MESSAGE,
+            "citations": [],
+            "gap_id": None,
+            "create_gap": False,
+        }
 
     if lookup:
-        state["confidence"] = "high"
-        state["citations"] = rules.citations_from_chunks(chunks)
-        state["create_gap"] = False
-        return state
+        return {
+            "confidence": "high",
+            "citations": rules.citations_from_chunks(chunks),
+            "create_gap": False,
+        }
 
     if rules.chunks_are_strong(chunks):
-        state["confidence"] = "high"
-        state["citations"] = rules.citations_from_chunks(chunks)
-        state["create_gap"] = False
-        return state
+        return {
+            "confidence": "high",
+            "citations": rules.citations_from_chunks(chunks),
+            "create_gap": False,
+        }
 
-    state["confidence"] = "low"
-    state["reply"] = rules.LOW_MESSAGE
-    state["citations"] = []
-    state["create_gap"] = True
-    state["gap_id"] = None
-    return state
+    gap_id = None
+    if state.get("persist_gap"):
+        store.init_db()
+        gap_id = store.create_gap(
+            question=state.get("message") or "",
+            user_id=int(state.get("user_id") or 0),
+            username=str(state.get("username") or ""),
+        )
+    return {
+        "confidence": "low",
+        "reply": rules.LOW_MESSAGE,
+        "citations": [],
+        "create_gap": gap_id is None,
+        "gap_id": gap_id,
+    }
+
+
+def feedback_node(state: AgentState) -> dict[str, Any]:
+    """反馈：问答链路收口，标记该回答可赞/踩；真正写入由 POST /api/feedback 完成。"""
+    return {"awaiting_feedback": True}
 
 
 def dispatch_from_route(state: AgentState) -> str:
-    route = state.get("route_kind") or "rag"
-    if route == "lookup":
-        return "lookup"
-    if route == "refuse":
+    if (state.get("route_kind") or "rag") == "refuse":
         return "quality"
     return "retrieve"
 
 
-def dispatch_after_lookup(state: AgentState) -> str:
-    if state.get("lookup"):
-        return "generate"
-    return "retrieve"
-
-
 def build_graph():
-    """编译 LangGraph；若环境缺少 langgraph，则退回同等节点顺序的本地执行器。"""
+    """五个节点用条件边连接；LangGraph 不可用时用同等顺序的本地执行器。"""
+    _patch_langchain_debug()
     try:
-        from langgraph.graph import END, StateGraph
+        from langgraph.graph import END, START, StateGraph
 
         graph = StateGraph(AgentState)
         graph.add_node("n_route", route_node)
-        graph.add_node("n_lookup", lookup_node)
         graph.add_node("n_retrieve", retrieve_node)
         graph.add_node("n_generate", generate_node)
         graph.add_node("n_quality", quality_node)
-        graph.set_entry_point("n_route")
+        graph.add_node("n_feedback", feedback_node)
+        graph.add_edge(START, "n_route")
         graph.add_conditional_edges(
             "n_route",
             dispatch_from_route,
             {
-                "lookup": "n_lookup",
                 "retrieve": "n_retrieve",
                 "quality": "n_quality",
             },
         )
-        graph.add_conditional_edges(
-            "n_lookup",
-            dispatch_after_lookup,
-            {
-                "generate": "n_generate",
-                "retrieve": "n_retrieve",
-            },
-        )
         graph.add_edge("n_retrieve", "n_generate")
         graph.add_edge("n_generate", "n_quality")
-        graph.add_edge("n_quality", END)
+        graph.add_edge("n_quality", "n_feedback")
+        graph.add_edge("n_feedback", END)
         compiled = graph.compile()
         return _SafeGraph(compiled)
-    except Exception as exc:  # noqa: BLE001 — 环境依赖冲突时仍要能问答
+    except Exception as exc:  # noqa: BLE001
         logger.warning("LangGraph 不可用，使用本地五节点执行器: %s", exc)
         return _LocalGraph()
 
 
 class _SafeGraph:
-    """优先走 LangGraph；运行期依赖冲突则回退本地节点。"""
-
     def __init__(self, compiled) -> None:
         self.compiled = compiled
+        self.uses_langgraph = True
 
     def invoke(self, state: dict[str, Any]) -> dict[str, Any]:
+        _patch_langchain_debug()
         try:
+            return self.compiled.invoke(state, config={"callbacks": []})
+        except TypeError:
             return self.compiled.invoke(state)
         except Exception as exc:  # noqa: BLE001
             logger.warning("LangGraph 执行失败，回退本地执行器: %s", exc)
@@ -230,23 +237,17 @@ class _SafeGraph:
 
 
 class _LocalGraph:
-    """与 LangGraph 节点顺序一致，避免缺依赖时问答不可用。"""
+    """与五节点顺序一致的兜底执行器。"""
+
+    uses_langgraph = False
 
     def invoke(self, state: dict[str, Any]) -> dict[str, Any]:
-        state = route_node(state)  # type: ignore[arg-type]
-        nxt = dispatch_from_route(state)  # type: ignore[arg-type]
-        if nxt == "lookup":
-            state = lookup_node(state)  # type: ignore[arg-type]
-            nxt2 = dispatch_after_lookup(state)  # type: ignore[arg-type]
-            if nxt2 == "retrieve":
-                state = retrieve_node(state)  # type: ignore[arg-type]
-                state = generate_node(state)  # type: ignore[arg-type]
-            else:
-                state = generate_node(state)  # type: ignore[arg-type]
-        elif nxt == "retrieve":
-            state = retrieve_node(state)  # type: ignore[arg-type]
-            state = generate_node(state)  # type: ignore[arg-type]
-        state = quality_node(state)  # type: ignore[arg-type]
+        state = {**state, **route_node(state)}  # type: ignore[arg-type]
+        if dispatch_from_route(state) == "retrieve":  # type: ignore[arg-type]
+            state = {**state, **retrieve_node(state)}  # type: ignore[arg-type]
+            state = {**state, **generate_node(state)}  # type: ignore[arg-type]
+        state = {**state, **quality_node(state)}  # type: ignore[arg-type]
+        state = {**state, **feedback_node(state)}  # type: ignore[arg-type]
         return state
 
 
@@ -258,3 +259,7 @@ def get_graph():
     if _GRAPH is None:
         _GRAPH = build_graph()
     return _GRAPH
+
+
+def graph_node_names() -> list[str]:
+    return ["n_route", "n_retrieve", "n_generate", "n_quality", "n_feedback"]

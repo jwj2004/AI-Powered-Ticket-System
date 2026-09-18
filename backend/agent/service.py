@@ -58,11 +58,12 @@ def run_chat(
             "confidence": "low",
             "gap_id": None,
             "create_gap": False,
+            "persist_gap": True,
         }
     )
 
     gap_id = result.get("gap_id")
-    if result.get("create_gap"):
+    if result.get("create_gap") and not gap_id:
         gap_id = store.create_gap(
             question=text,
             user_id=user.id,

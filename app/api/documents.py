@@ -118,8 +118,8 @@ def edit_document(
     user: User = Depends(get_current_user),
 ):
     try:
-        doc = update_document(db, doc_id, req.content)
-        return {"id": doc.id, "version": doc.version}
+        doc = update_document(db, doc_id, req.content, title=req.title)
+        return {"id": doc.id, "version": doc.version, "title": doc.title}
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
 
