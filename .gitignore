@@ -1,9 +1,45 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+env/
+
+# 前端（C 模块）
 node_modules/
 dist/
-__pycache__/
-*.pyc
-*.db
+
+# 数据库和索引
+db/*.db
+db/*.faiss
+db/*.json
+!db/.gitkeep
+
+# 模型缓存
+.cache/
+/models/
+
+# 日志
+logs/
+*.log
+
+# 环境变量
 .env
-.idea/
+.env.local
+
+# IDE
 .vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
 .DS_Store
+Thumbs.db
+*.Zone.Identifier
+
+# pytest
+.pytest_cache/
+.coverage
+htmlcov/
