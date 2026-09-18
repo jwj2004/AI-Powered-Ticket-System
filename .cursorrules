@@ -4,23 +4,24 @@
 「知答」是企业内网知识库问答 Agent。员工登录后提问，系统从内部文档检索证据并带引用回答；证据不足则记入知识缺口，管理员补全后通知提问者。
 
 ## 你现在是谁
-你在帮 B（生成与编排）写代码：LangGraph、POST /api/chat、多轮对话、跨会话记忆、缺口闭环。
+你在帮 B（生成与编排）写代码：LangGraph、POST /api/chat、多轮对话、跨会话记忆、缺口闭环、SSE 流式、混合检索。
 **不要修改后缀为 A、C 的文件夹。不要替 A 写 FAISS/文档上传，不要替 C 改 Vue 页面。**
 
 ## 技术栈
 - Python 3.10 + FastAPI + LangGraph + Pydantic v2
 - 会话库：SQLite（B 本地）
 - LLM：DeepSeek OpenAI 兼容接口
-- HTTP 同步 JSON，不要 SSE
+- POST /api/chat 默认 SSE（meta / token / done）；`Accept: application/json` 或 `stream=false` 时同步 JSON
 
 ## 接口契约硬约束
 - 除 `/api/auth/login`、`/api/health` 外，请求头 `Authorization: Bearer <token>`
 - JWT 密钥固定为 `zhida-jwt-shared-2026`，必须与 A 一致，禁止改成别的默认值
 - 字段 snake_case，空值 null，错误 `{"detail":"..."}`
-- confidence 只有 high / low
+- confidence 为 high / medium / low
 - 主接口 `POST /api/chat`，body `{message, conversation_id}`
 - citations 为 `{document_id, title, chunk_index}`
 - 低置信必须带固定文案，并写入知识缺口（闲聊拒答除外）
+- 缺口/通知列表返回 `{total, items}`（通知另含 unread）
 
 ## 不要做的事
 - 不要改 A/C 目录
