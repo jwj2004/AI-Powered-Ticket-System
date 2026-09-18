@@ -166,3 +166,56 @@ def update_document(db: Session, doc_id: int, content: str, title: str | None = 
 
     log.info(f"文档更新: {doc.title} v{doc.version} (chunks={len(chunks)})")
     return doc
+
+
+def rollback_document(db: Session, doc_id: int, target_version: int):
+    doc = db.query(Document).filter(Document.id == doc_id).first()
+    if not doc:
+        raise ValueError("文档不存在")
+
+    target = (
+        db.query(DocVersion)
+        .filter(DocVersion.document_id == doc_id, DocVersion.version == target_version)
+        .first()
+    )
+    if not target:
+        raise ValueError(f"版本 {target_version} 不存在")
+
+    old_chunks = db.query(DocumentChunk).filter(DocumentChunk.document_id == doc_id).all()
+    old_chunk_ids = [c.id for c in old_chunks]
+
+    doc.version += 1
+    doc.content = target.content
+
+    new_version = DocVersion(
+        document_id=doc.id,
+        version=doc.version,
+        content=target.content,
+    )
+    db.add(new_version)
+
+    db.query(DocumentChunk).filter(DocumentChunk.document_id == doc_id).delete()
+    chunks = split_text(target.content)
+    chunk_ids = []
+    for i, chunk_text in enumerate(chunks):
+        chunk = DocumentChunk(
+            document_id=doc_id,
+            chunk_index=i,
+            content=chunk_text,
+        )
+        db.add(chunk)
+        db.flush()
+        chunk_ids.append(chunk.id)
+
+    db.commit()
+    db.refresh(doc)
+
+    if old_chunk_ids:
+        from app.services.vector_retriever import VectorRetriever
+        VectorRetriever.remove_document_chunks(old_chunk_ids)
+    if chunks:
+        from app.services.vector_retriever import VectorRetriever
+        VectorRetriever.add_document_chunks(chunks, chunk_ids)
+
+    log.info(f"文档回滚: {doc.title} v{doc.version} (回滚至 v{target_version})")
+    return doc

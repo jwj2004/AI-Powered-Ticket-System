@@ -99,3 +99,21 @@ def make_admin(
     target.role = "admin"
     db.commit()
     return {"ok": True}
+
+
+@router.post("/{user_id}/disable")
+def disable_user(
+    user_id: int,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_admin),
+):
+    if user_id == user.id:
+        raise HTTPException(status_code=400, detail="不能禁用自己")
+    target = db.query(User).filter(User.id == user_id).first()
+    if not target:
+        raise HTTPException(status_code=404, detail="用户不存在")
+    if target.status == "rejected":
+        raise HTTPException(status_code=400, detail="用户已被禁用")
+    target.status = "rejected"
+    db.commit()
+    return {"ok": True}

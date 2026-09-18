@@ -21,6 +21,7 @@ from app.api import (
     notifications,
     dashboard,
     faq,
+    logs,
 )
 from backend.routers import router as b_router
 
@@ -50,6 +51,7 @@ app.include_router(notifications.router)
 app.include_router(dashboard.router)
 app.include_router(faq.router)
 app.include_router(lookup_retrieve.router)
+app.include_router(logs.router)
 
 # B 模块路由（LangGraph 问答编排）
 app.include_router(b_router)

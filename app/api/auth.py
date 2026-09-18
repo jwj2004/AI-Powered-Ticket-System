@@ -6,6 +6,7 @@ from app.core.database import get_db
 from app.core.deps import get_current_user
 from app.models.user import User
 from app.services.auth_service import authenticate, register_user
+from app.core.security import hash_password, verify_password
 
 router = APIRouter(prefix="/api/auth", tags=["认证"])
 
@@ -50,3 +51,23 @@ def register(req: RegisterRequest, db: Session = Depends(get_db)):
 @router.get("/me")
 def me(user: User = Depends(get_current_user)):
     return {"id": user.id, "username": user.username, "role": user.role}
+
+
+class ChangePasswordRequest(BaseModel):
+    old_password: str
+    new_password: str
+
+
+@router.post("/change-password")
+def change_password(
+    req: ChangePasswordRequest,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    if not verify_password(req.old_password, user.password_hash):
+        raise HTTPException(status_code=400, detail="原密码错误")
+    if len(req.new_password) < 6:
+        raise HTTPException(status_code=400, detail="新密码至少6位")
+    user.password_hash = hash_password(req.new_password)
+    db.commit()
+    return {"ok": True}
