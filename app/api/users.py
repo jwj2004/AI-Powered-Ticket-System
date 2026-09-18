@@ -1,0 +1,119 @@
+from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel
+from sqlalchemy.orm import Session
+
+from app.core.database import get_db
+from app.core.deps import require_admin
+from app.models.user import User
+from app.services.auth_service import create_user
+
+router = APIRouter(prefix="/api/users", tags=["用户管理"])
+
+
+class CreateUserRequest(BaseModel):
+    username: str
+    password: str
+    role: str = "newbie"
+
+
+@router.post("")
+def create_new_user(
+    req: CreateUserRequest,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_admin),
+):
+    if req.role not in ("admin", "ops", "newbie"):
+        raise HTTPException(status_code=400, detail="role 必须是 admin/ops/newbie")
+    try:
+        new_user = create_user(db, req.username, req.password, req.role)
+        return {"id": new_user.id, "ok": True}
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.get("/pending")
+def list_pending(
+    db: Session = Depends(get_db),
+    user: User = Depends(require_admin),
+):
+    pending_users = (
+        db.query(User)
+        .filter(User.status == "pending")
+        .order_by(User.created_at.desc())
+        .all()
+    )
+    return [
+        {
+            "id": u.id,
+            "username": u.username,
+            "role": u.role,
+            "created_at": u.created_at.isoformat() if u.created_at else "",
+        }
+        for u in pending_users
+    ]
+
+
+@router.post("/{user_id}/approve")
+def approve_user(
+    user_id: int,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_admin),
+):
+    target = db.query(User).filter(User.id == user_id).first()
+    if not target:
+        raise HTTPException(status_code=404, detail="用户不存在")
+    if target.status != "pending":
+        raise HTTPException(status_code=400, detail=f"用户状态为 {target.status}，无法审核")
+    target.status = "active"
+    db.commit()
+    return {"ok": True}
+
+
+@router.post("/{user_id}/reject")
+def reject_user(
+    user_id: int,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_admin),
+):
+    target = db.query(User).filter(User.id == user_id).first()
+    if not target:
+        raise HTTPException(status_code=404, detail="用户不存在")
+    if target.status != "pending":
+        raise HTTPException(status_code=400, detail=f"用户状态为 {target.status}，无法拒绝")
+    target.status = "rejected"
+    db.commit()
+    return {"ok": True}
+
+
+@router.post("/{user_id}/make-admin")
+def make_admin(
+    user_id: int,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_admin),
+):
+    if user_id == user.id:
+        raise HTTPException(status_code=400, detail="不能修改自己的角色")
+    target = db.query(User).filter(User.id == user_id).first()
+    if not target:
+        raise HTTPException(status_code=404, detail="用户不存在")
+    target.role = "admin"
+    db.commit()
+    return {"ok": True}
+
+
+@router.post("/{user_id}/disable")
+def disable_user(
+    user_id: int,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_admin),
+):
+    if user_id == user.id:
+        raise HTTPException(status_code=400, detail="不能禁用自己")
+    target = db.query(User).filter(User.id == user_id).first()
+    if not target:
+        raise HTTPException(status_code=404, detail="用户不存在")
+    if target.status == "rejected":
+        raise HTTPException(status_code=400, detail="用户已被禁用")
+    target.status = "rejected"
+    db.commit()
+    return {"ok": True}
