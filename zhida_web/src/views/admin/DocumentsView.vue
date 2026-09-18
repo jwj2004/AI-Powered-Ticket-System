@@ -26,16 +26,16 @@
           <tr v-if="!docs.length">
             <td colspan="5" class="empty">暂无文档</td>
           </tr>
-          <tr v-for="d in docs" :key="d.id">
+          <tr v-for="d in docs" :key="d.id" :class="{ stale: isStale(d.updated_at) }">
             <td>{{ d.title }}</td>
             <td>{{ d.space }}</td>
             <td>v{{ d.version }}</td>
             <td>{{ formatTime(d.updated_at) }}</td>
             <td class="ops">
-              <button type="button" class="text-btn" @click="openPreview(d)">预览</button>
-              <button type="button" class="text-btn" @click="openVersions(d)">历史版本</button>
-              <button type="button" class="icon-btn" title="编辑" @click="openEdit(d)">✎</button>
-              <button type="button" class="icon-btn danger" title="删除" @click="onDelete(d)">✕</button>
+              <button type="button" class="action-btn" @click="openPreview(d)">👁 预览</button>
+              <button type="button" class="action-btn" @click="openVersions(d)">🕘 历史</button>
+              <button type="button" class="action-btn" @click="openEdit(d)">✎ 编辑</button>
+              <button type="button" class="action-btn danger" @click="onDelete(d)">✕ 删除</button>
             </td>
           </tr>
         </tbody>
@@ -192,9 +192,19 @@ const editForm = reactive({
   space_id: 1,
 })
 
+const STALE_MS = 90 * 24 * 60 * 60 * 1000
+
 function formatTime(iso) {
   if (!iso) return ''
   return String(iso).replace('T', ' ').slice(0, 16)
+}
+
+/** updated_at 超过 90 天：整行文字标黄，提醒文档可能过期 */
+function isStale(updatedAt) {
+  if (!updatedAt) return false
+  const t = new Date(updatedAt).getTime()
+  if (Number.isNaN(t)) return false
+  return Date.now() - t > STALE_MS
 }
 
 /** 纯文本转简单 HTML，便于编辑器展示 */
@@ -407,7 +417,7 @@ h2 { margin: 0 0 4px; font-size: 18px; }
   cursor: pointer;
 }
 .btn:hover:not(:disabled) { background: var(--color-primary-hover); }
-.btn:disabled { background: #93c5fd; cursor: not-allowed; }
+.btn:disabled { background: var(--color-primary-muted); cursor: not-allowed; }
 .table-wrap { overflow: auto; }
 table {
   width: 100%;
@@ -420,7 +430,18 @@ th, td {
   text-align: left;
 }
 th { color: #64748b; font-weight: 600; background: #f8fafc; }
-tbody tr:hover { background: #f1f5f9; }
+tbody tr:hover { background: #eff6ff; }
+tbody tr.stale td {
+  color: #ca8a04;
+}
+tbody tr.stale .action-btn {
+  color: #ca8a04;
+  border-color: #fde68a;
+}
+tbody tr.stale .action-btn.danger {
+  color: #ca8a04;
+}
+tbody tr.stale:hover { background: #fffbeb; }
 .empty { text-align: center; color: #999; }
 .ops {
   white-space: nowrap;
@@ -429,7 +450,10 @@ tbody tr:hover { background: #f1f5f9; }
   gap: 6px;
   flex-wrap: wrap;
 }
-.text-btn {
+.action-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
   border: 1px solid var(--color-border);
   background: #fff;
   color: var(--color-primary);
@@ -437,21 +461,11 @@ tbody tr:hover { background: #f1f5f9; }
   padding: 4px 10px;
   font-size: 12px;
   cursor: pointer;
+  line-height: 1.4;
 }
-.text-btn:hover { background: var(--color-primary-soft); }
-.icon-btn {
-  width: 30px;
-  height: 30px;
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-sm);
-  background: #fff;
-  color: var(--color-primary);
-  cursor: pointer;
-  line-height: 1;
-}
-.icon-btn:hover { background: var(--color-primary-soft); }
-.icon-btn.danger { color: var(--color-danger); }
-.icon-btn.danger:hover { background: #fef2f2; }
+.action-btn:hover { background: var(--color-primary-soft); border-color: var(--color-primary-muted); }
+.action-btn.danger { color: var(--color-danger); }
+.action-btn.danger:hover { background: #fef2f2; border-color: #fecaca; }
 .link-btn {
   border: none;
   background: transparent;

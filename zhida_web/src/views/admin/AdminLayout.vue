@@ -7,6 +7,7 @@
         <RouterLink to="/admin/documents">文档管理</RouterLink>
         <RouterLink to="/admin/gaps">知识缺口</RouterLink>
         <RouterLink to="/admin/dashboard">数据看板</RouterLink>
+        <RouterLink to="/admin/users">用户管理</RouterLink>
         <RouterLink to="/admin/pending-faq">待确认 FAQ</RouterLink>
         <RouterLink to="/admin/faq">新手指南</RouterLink>
       </nav>
@@ -42,7 +43,7 @@ function onLogout() {
 }
 .nav {
   width: 228px;
-  background: #0f172a;
+  background: var(--color-sidebar, #1e293b);
   color: #fff;
   padding: 24px 14px;
   display: flex;
@@ -82,6 +83,7 @@ nav a.router-link-active {
   background: var(--color-primary);
   color: #fff;
   font-weight: 600;
+  box-shadow: 0 4px 12px rgba(37, 99, 235, 0.35);
 }
 .bottom {
   display: flex;
@@ -101,7 +103,7 @@ nav a.router-link-active {
 }
 .logout {
   border: none;
-  background: #1e293b;
+  background: #0f172a;
   color: #e2e8f0;
   padding: 10px;
   border-radius: var(--radius-sm);

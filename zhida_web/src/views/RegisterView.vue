@@ -1,9 +1,9 @@
 <template>
-  <div class="login-page">
+  <div class="reg-page">
     <div class="card">
       <div class="logo">知</div>
-      <h1>知答</h1>
-      <p class="sub">企业内部知识库问答</p>
+      <h1>申请注册</h1>
+      <p class="sub">提交后由管理员审核开通</p>
 
       <label class="label">用户名</label>
       <input v-model="username" class="input" placeholder="请输入用户名" @keyup.enter="onSubmit" />
@@ -17,67 +17,76 @@
         @keyup.enter="onSubmit"
       />
 
-      <p v-if="tip" class="tip">{{ tip }}</p>
+      <label class="label">确认密码</label>
+      <input
+        v-model="confirm"
+        type="password"
+        class="input"
+        placeholder="再次输入密码"
+        @keyup.enter="onSubmit"
+      />
+
+      <label class="label">申请角色</label>
+      <select v-model="role" class="input select">
+        <option value="ops">ops（客服/运维）</option>
+        <option value="newbie">newbie（新人）</option>
+      </select>
+
       <p v-if="error" class="error">{{ error }}</p>
 
       <button class="btn" :disabled="loading" @click="onSubmit">
-        {{ loading ? '登录中...' : '登录' }}
+        {{ loading ? '提交中...' : '提交申请' }}
       </button>
 
-      <p class="reg">
-        没有账号？
-        <RouterLink to="/register">申请注册</RouterLink>
+      <p class="foot">
+        已有账号？
+        <RouterLink to="/login">返回登录</RouterLink>
       </p>
     </div>
   </div>
 </template>
 
 <script setup>
-import { onMounted, ref } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
-import { login } from '../api/auth'
+import { ref } from 'vue'
+import { useRouter } from 'vue-router'
+import { register } from '../api/auth'
 
 const router = useRouter()
-const route = useRoute()
 const username = ref('')
 const password = ref('')
+const confirm = ref('')
+const role = ref('newbie')
 const loading = ref(false)
 const error = ref('')
-const tip = ref('')
-
-onMounted(() => {
-  const q = route.query.tip
-  if (typeof q === 'string' && q) tip.value = q
-})
-
-function resolveLanding(role) {
-  const redirect = route.query.redirect
-  if (typeof redirect === 'string' && redirect.startsWith('/')) {
-    return redirect
-  }
-  return role === 'admin' ? '/admin/documents' : '/chat'
-}
 
 async function onSubmit() {
   error.value = ''
-  tip.value = ''
-  if (!username.value.trim() || !password.value) {
-    error.value = '请输入用户名和密码'
+  const name = username.value.trim()
+  if (!name || !password.value) {
+    error.value = '请填写用户名和密码'
+    return
+  }
+  if (password.value !== confirm.value) {
+    error.value = '两次密码不一致'
+    return
+  }
+  if (role.value !== 'ops' && role.value !== 'newbie') {
+    error.value = '请选择角色'
     return
   }
   loading.value = true
   try {
-    const data = await login(username.value.trim(), password.value)
-    router.replace(resolveLanding(data.role))
+    await register({
+      username: name,
+      password: password.value,
+      role: role.value,
+    })
+    router.replace({
+      path: '/login',
+      query: { tip: '申请已提交，等待管理员审核' },
+    })
   } catch (e) {
-    const detail = e.detail || e.message || '登录失败'
-    // 待审核 / 拒绝：用 tip 样式区分；其它错误走 error
-    if (detail.includes('待审核') || detail.includes('已被拒绝') || detail.includes('拒绝')) {
-      tip.value = detail
-      error.value = ''
-    } else {
-      error.value = detail
-    }
+    error.value = e.detail || e.message || '提交失败'
   } finally {
     loading.value = false
   }
@@ -85,7 +94,7 @@ async function onSubmit() {
 </script>
 
 <style scoped>
-.login-page {
+.reg-page {
   min-height: 100vh;
   display: flex;
   align-items: center;
@@ -117,20 +126,18 @@ async function onSubmit() {
   display: flex;
   align-items: center;
   justify-content: center;
-  letter-spacing: 0.02em;
   box-shadow: 0 8px 20px rgba(37, 99, 235, 0.35);
 }
 h1 {
   margin: 0;
   text-align: center;
-  font-size: 28px;
-  color: var(--color-text);
+  font-size: 26px;
   font-weight: 700;
 }
 .sub {
   text-align: center;
   color: var(--color-text-secondary);
-  margin: 6px 0 26px;
+  margin: 6px 0 22px;
   font-size: 13px;
 }
 .label {
@@ -153,6 +160,9 @@ h1 {
   border-color: var(--color-primary);
   box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.18);
 }
+.select {
+  cursor: pointer;
+}
 .btn {
   width: 100%;
   margin-top: 22px;
@@ -163,7 +173,6 @@ h1 {
   color: #fff;
   font-weight: 600;
   cursor: pointer;
-  transition: background 0.15s, box-shadow 0.15s;
   box-shadow: 0 4px 12px rgba(37, 99, 235, 0.25);
 }
 .btn:hover:not(:disabled) {
@@ -179,27 +188,18 @@ h1 {
   margin: 10px 0 0;
   font-size: 13px;
 }
-.tip {
-  margin: 10px 0 0;
-  font-size: 13px;
-  color: var(--color-warn);
-  background: #fffbeb;
-  border: 1px solid #fde68a;
-  border-radius: var(--radius-sm);
-  padding: 8px 10px;
-}
-.reg {
-  margin-top: 14px;
+.foot {
+  margin-top: 16px;
   text-align: center;
   font-size: 13px;
   color: #6b7280;
 }
-.reg a {
+.foot a {
   color: var(--color-primary);
   text-decoration: none;
   font-weight: 600;
 }
-.reg a:hover {
+.foot a:hover {
   text-decoration: underline;
 }
 </style>

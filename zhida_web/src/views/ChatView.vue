@@ -9,7 +9,7 @@
         <div class="bell-wrap">
           <button type="button" class="bell" title="通知" @click="toggleNotif">
             🔔
-            <span v-if="unreadCount > 0" class="badge">{{ unreadCount }}</span>
+            <span v-if="unreadCount > 0" class="badge" :title="`未读 ${unreadCount}`"></span>
           </button>
           <div v-if="showNotif" class="notif-panel">
             <div class="notif-head">通知</div>
@@ -44,9 +44,16 @@
           <div class="side-title">历史会话</div>
           <button type="button" class="new-chat" @click="onNewChat">新对话</button>
         </div>
+        <input
+          v-model="convQuery"
+          class="conv-search"
+          type="search"
+          placeholder="搜索会话标题..."
+          aria-label="搜索会话"
+        />
         <div v-if="convLoading" class="muted pad">加载中...</div>
         <button
-          v-for="c in conversations"
+          v-for="c in filteredConversations"
           :key="c.conversation_id"
           type="button"
           class="conv-item"
@@ -57,6 +64,9 @@
           <div class="conv-time">{{ formatTime(c.updated_at) }}</div>
         </button>
         <p v-if="!convLoading && !conversations.length" class="muted pad">暂无历史会话</p>
+        <p v-else-if="!convLoading && conversations.length && !filteredConversations.length" class="muted pad">
+          无匹配会话
+        </p>
       </aside>
 
       <main class="main">
@@ -82,10 +92,12 @@
               }"
             >
               <div class="role">{{ m.role === 'user' ? '我' : '知答' }}</div>
-              <div class="content">{{ m.content }}</div>
+              <div class="content">
+                {{ m.content }}<span v-if="m.typing" class="cursor" aria-hidden="true">|</span>
+              </div>
 
-              <!-- 引用来源：high / medium / low 都列出 -->
-              <div v-if="m.citations?.length" class="cites">
+              <!-- 引用来源：打字结束后再展示 -->
+              <div v-if="!m.typing && m.citations?.length" class="cites">
                 <div class="cites-label">引用来源</div>
                 <button
                   v-for="(c, j) in m.citations"
@@ -94,37 +106,43 @@
                   class="cite-chip"
                   @click="openCitation(c)"
                 >
-                  {{ c.title }} · chunk {{ c.chunk_index }}
+                  <span class="cite-ico" aria-hidden="true">📄</span>
+                  <span>{{ c.title }} · chunk {{ c.chunk_index }}</span>
                 </button>
               </div>
 
               <!-- 仅 low：黄色提示 + gap_id；medium 不显示 -->
-              <div v-if="isLowConfidence(m.confidence)" class="gap-tip">
+              <div v-if="!m.typing && isLowConfidence(m.confidence)" class="gap-tip">
                 证据不足，已记入知识缺口
                 <span v-if="m.gap_id != null">（gap_id: {{ m.gap_id }}）</span>
               </div>
 
-              <!-- 赞 / 踩 -->
-              <div v-if="m.role === 'assistant' && m.message_id" class="fb">
-                <button
-                  type="button"
-                  class="fb-btn"
-                  :class="{ active: m.feedback === true }"
-                  :disabled="m.feedback !== null"
-                  @click="onFeedback(m, true)"
-                >
-                  赞
+              <!-- 复制 + 赞 / 踩：打字结束后再展示 -->
+              <div v-if="m.role === 'assistant' && !m.typing" class="fb">
+                <button type="button" class="fb-btn copy" @click="onCopy(m)">
+                  {{ m.copied ? '已复制' : '复制' }}
                 </button>
-                <button
-                  type="button"
-                  class="fb-btn down"
-                  :class="{ active: m.feedback === false }"
-                  :disabled="m.feedback !== null"
-                  @click="onFeedback(m, false)"
-                >
-                  踩
-                </button>
-                <span v-if="m.feedback !== null" class="fb-done">已反馈</span>
+                <template v-if="m.message_id">
+                  <button
+                    type="button"
+                    class="fb-btn"
+                    :class="{ active: m.feedback === true }"
+                    :disabled="m.feedback !== null"
+                    @click="onFeedback(m, true)"
+                  >
+                    赞
+                  </button>
+                  <button
+                    type="button"
+                    class="fb-btn down"
+                    :class="{ active: m.feedback === false }"
+                    :disabled="m.feedback !== null"
+                    @click="onFeedback(m, false)"
+                  >
+                    踩
+                  </button>
+                  <span v-if="m.feedback !== null" class="fb-done">已反馈</span>
+                </template>
               </div>
             </div>
           </div>
@@ -153,8 +171,8 @@
               placeholder="输入问题，Enter 发送，Shift+Enter 换行"
               @keydown="onKeydown"
             ></textarea>
-            <button class="btn" :disabled="loading || !input.trim()" @click="onSend">
-              发送
+            <button class="btn send-btn" :disabled="loading || !input.trim()" @click="onSend" title="发送">
+              ↑
             </button>
           </div>
         </div>
@@ -182,6 +200,7 @@ import { useRouter } from 'vue-router'
 import { getUsername, getRole, clearAuth } from '../api/authStorage'
 import { chat, sendFeedback, getCitationChunk, listConversations, listMessages } from '../api/chat'
 import { listNotifications, markNotificationRead } from '../api/notifications'
+import { typewrite } from '../utils/typewriter'
 
 const router = useRouter()
 const username = getUsername() || ''
@@ -197,12 +216,22 @@ const listEl = ref(null)
 const citationDetail = ref(null)
 
 const conversations = ref([])
+const convQuery = ref('')
 const convLoading = ref(false)
 const notifications = ref([])
 const notifUnread = ref(0)
 const showNotif = ref(false)
 
+/** 切换会话时递增，打断进行中的打字机 */
+let typeToken = 0
+
 const unreadCount = computed(() => notifUnread.value)
+
+const filteredConversations = computed(() => {
+  const q = convQuery.value.trim().toLowerCase()
+  if (!q) return conversations.value
+  return conversations.value.filter((c) => String(c.title || '').toLowerCase().includes(q))
+})
 
 function formatTime(iso) {
   if (!iso) return ''
@@ -253,7 +282,12 @@ function onKeydown(e) {
   }
 }
 
+function cancelTypewriter() {
+  typeToken += 1
+}
+
 function onNewChat() {
+  cancelTypewriter()
   conversationId.value = null
   messages.value = []
   error.value = ''
@@ -262,6 +296,7 @@ function onNewChat() {
 
 async function onSelectConversation(id) {
   if (loading.value || historyLoading.value) return
+  cancelTypewriter()
   error.value = ''
   conversationId.value = id
   historyLoading.value = true
@@ -276,6 +311,8 @@ async function onSelectConversation(id) {
       message_id: m.message_id || null,
       gap_id: m.gap_id ?? null,
       feedback: null,
+      typing: false,
+      copied: false,
     }))
   } catch (e) {
     error.value = e.detail || e.message || '加载消息失败'
@@ -295,27 +332,69 @@ async function onSend() {
   loading.value = true
   await scrollToBottom()
 
+  const myToken = ++typeToken
+
   try {
     const data = await chat({
       message: text,
       conversation_id: conversationId.value,
     })
+    if (myToken !== typeToken) return
+
     conversationId.value = data.conversation_id
+    const reply = data.reply || ''
     messages.value.push({
       role: 'assistant',
-      content: data.reply,
+      content: '',
       citations: data.citations || [],
       confidence: data.confidence,
       message_id: data.message_id,
       gap_id: data.gap_id ?? null,
       feedback: null,
+      typing: true,
+      copied: false,
     })
+    // 取数组内响应式对象再写 content，避免打字机不刷新
+    const msg = messages.value[messages.value.length - 1]
+    loading.value = false
+    await scrollToBottom()
+
+    // 本地打字机；后端 SSE 就绪后可改为流式写入 content
+    await typewrite(
+      reply,
+      (partial) => {
+        msg.content = partial
+        if (partial.length % 8 === 0) scrollToBottom()
+      },
+      {
+        interval: 18,
+        shouldContinue: () => myToken === typeToken,
+      },
+    )
+
+    if (myToken !== typeToken) return
+    msg.content = reply
+    msg.typing = false
     await refreshConversations()
   } catch (e) {
     error.value = e.detail || e.message || '发送失败'
   } finally {
     loading.value = false
     await scrollToBottom()
+  }
+}
+
+async function onCopy(m) {
+  const text = m.content || ''
+  if (!text) return
+  try {
+    await navigator.clipboard.writeText(text)
+    m.copied = true
+    setTimeout(() => {
+      m.copied = false
+    }, 1500)
+  } catch (e) {
+    error.value = '复制失败，请检查浏览器权限'
   }
 }
 
@@ -392,17 +471,16 @@ h1 { margin: 0; font-size: 18px; color: var(--color-text); }
 }
 .badge {
   position: absolute;
-  top: -4px;
-  right: -4px;
-  min-width: 16px;
-  height: 16px;
-  padding: 0 4px;
-  border-radius: var(--radius-pill);
-  background: #dc2626;
-  color: #fff;
-  font-size: 11px;
-  line-height: 16px;
-  text-align: center;
+  top: 2px;
+  right: 2px;
+  width: 8px;
+  height: 8px;
+  min-width: 8px;
+  padding: 0;
+  border-radius: 50%;
+  background: #ef4444;
+  border: 1.5px solid #fff;
+  box-sizing: content-box;
 }
 .notif-panel {
   position: absolute;
@@ -475,6 +553,20 @@ h1 { margin: 0; font-size: 18px; color: var(--color-text); }
   cursor: pointer;
 }
 .new-chat:hover { background: var(--color-primary-hover); }
+.conv-search {
+  width: 100%;
+  margin-bottom: 10px;
+  padding: 7px 10px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: #fff;
+  font-size: 12px;
+}
+.conv-search:focus {
+  outline: none;
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.15);
+}
 .conv-item {
   display: block;
   width: 100%;
@@ -528,21 +620,22 @@ h1 { margin: 0; font-size: 18px; color: var(--color-text); }
 .row.assistant { justify-content: flex-start; }
 
 .bubble {
-  max-width: min(720px, 85%);
-  padding: 12px 14px;
+  max-width: 70%;
+  padding: 12px 16px;
   border-radius: 16px;
   border: 1px solid transparent;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
 }
 .bubble.user {
   background: var(--color-primary);
   color: #fff;
-  border-bottom-right-radius: 4px;
+  border-bottom-right-radius: 6px;
 }
 .bubble.user .role { color: rgba(255, 255, 255, 0.72); }
 .bubble.assistant {
-  background: #eef1f5;
+  background: #f1f5f9;
   color: var(--color-text);
-  border-bottom-left-radius: 4px;
+  border-bottom-left-radius: 6px;
 }
 .bubble.low {
   background: #fff7ed;
@@ -566,6 +659,16 @@ h1 { margin: 0; font-size: 18px; color: var(--color-text); }
   white-space: pre-wrap;
   word-break: break-word;
 }
+.cursor {
+  display: inline-block;
+  margin-left: 1px;
+  color: var(--color-primary);
+  animation: blink 0.9s step-end infinite;
+  font-weight: 400;
+}
+@keyframes blink {
+  50% { opacity: 0; }
+}
 
 .cites { margin-top: 10px; }
 .cites-label {
@@ -574,16 +677,29 @@ h1 { margin: 0; font-size: 18px; color: var(--color-text); }
   margin-bottom: 6px;
 }
 .cite-chip {
-  display: inline-block;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
   margin: 0 6px 6px 0;
-  padding: 3px 10px;
+  padding: 4px 10px;
   border: none;
-  border-radius: 6px;
+  border-radius: var(--radius-pill);
   background: #fff;
   color: var(--color-primary);
   font-size: 12px;
   cursor: pointer;
   box-shadow: 0 0 0 1px #bfdbfe inset;
+  max-width: 100%;
+}
+.cite-ico {
+  font-size: 12px;
+  line-height: 1;
+  flex-shrink: 0;
+}
+.cite-chip span:last-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .cite-chip:hover { background: var(--color-primary-soft); }
 
@@ -610,6 +726,8 @@ h1 { margin: 0; font-size: 18px; color: var(--color-text); }
   background: #fff;
   cursor: pointer;
 }
+.fb-btn.copy { color: #374151; }
+.fb-btn.copy:hover { border-color: var(--color-primary-muted); color: var(--color-primary); }
 .fb-btn.down { color: #b3261e; }
 .fb-btn.active {
   background: var(--color-primary-soft);
@@ -634,25 +752,27 @@ h1 { margin: 0; font-size: 18px; color: var(--color-text); }
   display: flex;
   gap: 10px;
   align-items: flex-end;
-  background: #f8fafc;
-  padding: 12px;
-  border-radius: var(--radius);
+  background: #fff;
+  padding: 10px 12px;
+  border-radius: 20px;
   border: 1px solid var(--color-border);
+  box-shadow: var(--shadow);
 }
 .input {
   flex: 1;
   resize: none;
   min-height: 44px;
   max-height: 120px;
-  padding: 10px 12px;
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-sm);
-  background: #fff;
+  padding: 10px 14px;
+  border: 1px solid transparent;
+  border-radius: 14px;
+  background: #f8fafc;
 }
 .input:focus {
   outline: none;
   border-color: var(--color-primary);
-  box-shadow: 0 0 0 3px rgba(30, 64, 175, 0.12);
+  background: #fff;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
 }
 .btn {
   padding: 10px 18px;
@@ -664,7 +784,18 @@ h1 { margin: 0; font-size: 18px; color: var(--color-text); }
   cursor: pointer;
 }
 .btn:hover:not(:disabled) { background: var(--color-primary-hover); }
-.btn:disabled { background: #93c5fd; cursor: not-allowed; }
+.btn:disabled { background: var(--color-primary-muted); cursor: not-allowed; }
+.send-btn {
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border-radius: 50%;
+  font-size: 18px;
+  font-weight: 700;
+  line-height: 44px;
+  flex-shrink: 0;
+  box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3);
+}
 .error {
   color: var(--color-danger);
   margin: 0 16px 8px;

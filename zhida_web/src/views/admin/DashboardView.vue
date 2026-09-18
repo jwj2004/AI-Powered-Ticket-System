@@ -82,7 +82,7 @@ function renderCharts() {
           name: '数量',
           type: 'bar',
           data: trend.map((d) => d.count),
-          itemStyle: { color: '#1e40af', borderRadius: [4, 4, 0, 0] },
+          itemStyle: { color: '#2563eb', borderRadius: [4, 4, 0, 0] },
           barWidth: 28,
         },
       ],
@@ -165,15 +165,16 @@ h2 { margin: 0 0 4px; font-size: 18px; }
   box-shadow: var(--shadow, 0 1px 3px rgba(15, 23, 42, 0.06));
 }
 .card-label {
-  font-size: 12px;
-  color: #9ca3af;
+  font-size: 14px;
+  color: #94a3b8;
+  font-weight: 500;
 }
 .card-value {
   margin-top: 10px;
   font-size: 32px;
   font-weight: 700;
   line-height: 1.1;
-  color: var(--color-primary, #1e40af);
+  color: var(--color-primary, #2563eb);
 }
 .card-value.warn { color: var(--color-warn, #b45309); }
 

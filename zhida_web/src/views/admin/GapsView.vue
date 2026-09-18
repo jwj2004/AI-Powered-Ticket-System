@@ -36,11 +36,11 @@
               <button
                 v-if="g.status === 'pending'"
                 type="button"
-                class="icon-btn"
+                class="action-btn"
                 title="处理"
                 @click="openResolve(g)"
               >
-                ✓
+                ✓ 处理
               </button>
               <span v-else class="muted">已处理</span>
             </td>
@@ -170,7 +170,7 @@ th, td {
   text-align: left;
 }
 th { color: #64748b; font-weight: 600; background: #f8fafc; }
-tbody tr:hover { background: #f1f5f9; }
+tbody tr:hover { background: #eff6ff; }
 .empty { text-align: center; color: #999; }
 .status {
   display: inline-block;
@@ -180,17 +180,20 @@ tbody tr:hover { background: #f1f5f9; }
 }
 .status.pending { background: #fff7ed; color: var(--color-warn); }
 .status.resolved { background: #ecfdf5; color: var(--color-success); }
-.icon-btn {
-  width: 30px;
-  height: 30px;
+.action-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
   border: 1px solid var(--color-border);
   border-radius: var(--radius-sm);
   background: #fff;
   color: var(--color-primary);
   cursor: pointer;
-  font-weight: 700;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 4px 10px;
 }
-.icon-btn:hover { background: var(--color-primary-soft); }
+.action-btn:hover { background: var(--color-primary-soft); border-color: var(--color-primary-muted); }
 .link-btn {
   border: none;
   background: transparent;

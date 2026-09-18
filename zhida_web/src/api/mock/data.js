@@ -1,9 +1,45 @@
 /** mock 数据，字段对齐 docs/接口契约.md */
 
 export const MOCK_USERS = {
-  admin: { username: 'admin', password: '123456', role: 'admin' },
-  zhangsan: { username: 'zhangsan', password: '123456', role: 'ops' },
-  lisi: { username: 'lisi', password: '123456', role: 'newbie' },
+  admin: { id: 1, username: 'admin', password: '123456', role: 'admin', status: 'active' },
+  zhangsan: { id: 2, username: 'zhangsan', password: '123456', role: 'ops', status: 'active' },
+  lisi: { id: 3, username: 'lisi', password: '123456', role: 'newbie', status: 'active' },
+  /** 登录提示联调：账号待审核 */
+  wangwu: { id: 10, username: 'wangwu', password: '123456', role: 'ops', status: 'pending' },
+  /** 登录提示联调：已被拒绝 */
+  zhaoliu: { id: 11, username: 'zhaoliu', password: '123456', role: 'newbie', status: 'rejected' },
+}
+
+/** 待审核注册申请（可变） */
+export let MOCK_PENDING_USERS = [
+  {
+    id: 10,
+    username: 'wangwu',
+    role: 'ops',
+    status: 'pending',
+    created_at: '2026-09-17T10:00:00',
+  },
+  {
+    id: 12,
+    username: 'chenqi',
+    role: 'newbie',
+    status: 'pending',
+    created_at: '2026-09-18T09:30:00',
+  },
+]
+
+/** 已通过用户（可变；不含 pending/rejected） */
+export let MOCK_ACTIVE_USERS = [
+  { id: 1, username: 'admin', role: 'admin', status: 'active', created_at: '2026-09-01T08:00:00' },
+  { id: 2, username: 'zhangsan', role: 'ops', status: 'active', created_at: '2026-09-10T08:00:00' },
+  { id: 3, username: 'lisi', role: 'newbie', status: 'active', created_at: '2026-09-12T08:00:00' },
+]
+
+let _nextUserId = 100
+
+export function mockNextUserId() {
+  _nextUserId += 1
+  return _nextUserId
 }
 
 export const MOCK_DOC_SPACES = [

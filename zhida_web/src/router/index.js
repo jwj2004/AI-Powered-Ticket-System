@@ -2,6 +2,7 @@ import { createRouter, createWebHistory } from 'vue-router'
 import { getToken, getRole } from '../api/authStorage'
 
 import LoginView from '../views/LoginView.vue'
+import RegisterView from '../views/RegisterView.vue'
 import ChatView from '../views/ChatView.vue'
 import AdminLayout from '../views/admin/AdminLayout.vue'
 import DocumentsView from '../views/admin/DocumentsView.vue'
@@ -9,6 +10,7 @@ import GapsView from '../views/admin/GapsView.vue'
 import DashboardView from '../views/admin/DashboardView.vue'
 import FaqView from '../views/admin/FaqView.vue'
 import PendingFaqView from '../views/admin/PendingFaqView.vue'
+import UsersView from '../views/admin/UsersView.vue'
 
 /** 角色可访问路径：ops 仅问答；newbie 问答+FAQ；admin 全部 */
 function canAccess(role, path) {
@@ -33,6 +35,12 @@ const router = createRouter({
       meta: { public: true },
     },
     {
+      path: '/register',
+      name: 'register',
+      component: RegisterView,
+      meta: { public: true },
+    },
+    {
       path: '/chat',
       name: 'chat',
       component: ChatView,
@@ -54,6 +62,7 @@ const router = createRouter({
         { path: 'dashboard', name: 'admin-dashboard', component: DashboardView },
         { path: 'pending-faq', name: 'admin-pending-faq', component: PendingFaqView },
         { path: 'faq', name: 'admin-faq', component: FaqView },
+        { path: 'users', name: 'admin-users', component: UsersView },
       ],
     },
   ],
@@ -64,7 +73,7 @@ router.beforeEach((to) => {
   const role = getRole()
 
   if (to.meta.public) {
-    if (token && to.path === '/login') {
+    if (token && (to.path === '/login' || to.path === '/register')) {
       return role === 'admin' ? '/admin/documents' : '/chat'
     }
     return true
