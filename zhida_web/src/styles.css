@@ -1,10 +1,62 @@
+/* 知答 · 全局视觉 token */
+:root {
+  --color-primary: #2563eb;
+  --color-primary-hover: #1d4ed8;
+  --color-primary-soft: #dbeafe;
+  --color-primary-muted: #93c5fd;
+  --color-bg: #f8fafc;
+  --color-surface: #ffffff;
+  --color-text: #1f2937;
+  --color-text-secondary: #6b7280;
+  --color-border: #e5e7eb;
+  --color-danger: #dc2626;
+  --color-success: #15803d;
+  --color-warn: #b45309;
+  --color-sidebar: #1e293b;
+  --radius: 12px;
+  --radius-sm: 8px;
+  --radius-lg: 16px;
+  --radius-pill: 999px;
+  --shadow: 0 1px 3px rgba(15, 23, 42, 0.06), 0 4px 14px rgba(15, 23, 42, 0.05);
+  --shadow-lg: 0 10px 30px rgba(15, 23, 42, 0.12);
+  --font: 14px/1.6 "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei",
+    -apple-system, BlinkMacSystemFont, sans-serif;
+  --space: 16px;
+}
+
 * {
   box-sizing: border-box;
 }
-html, body {
+
+html,
+body {
   margin: 0;
   padding: 0;
+  font: var(--font);
+  color: var(--color-text);
+  background: var(--color-bg);
+  -webkit-font-smoothing: antialiased;
 }
+
 #app {
   min-height: 100vh;
+}
+
+button,
+input,
+textarea,
+select {
+  font: inherit;
+}
+
+a {
+  color: var(--color-primary);
+}
+
+/* 通用卡片表面 */
+.panel {
+  background: var(--color-surface);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  border: 1px solid var(--color-border);
 }

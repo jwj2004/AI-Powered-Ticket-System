@@ -1,15 +1,131 @@
 /** mock 数据，字段对齐 docs/接口契约.md */
 
 export const MOCK_USERS = {
-  admin: { username: 'admin', password: '123456', role: 'admin' },
-  zhangsan: { username: 'zhangsan', password: '123456', role: 'ops' },
-  lisi: { username: 'lisi', password: '123456', role: 'newbie' },
+  admin: { id: 1, username: 'admin', password: '123456', role: 'admin', status: 'active' },
+  zhangsan: { id: 2, username: 'zhangsan', password: '123456', role: 'ops', status: 'active' },
+  lisi: { id: 3, username: 'lisi', password: '123456', role: 'newbie', status: 'active' },
+  /** 登录提示联调：账号待审核 */
+  wangwu: { id: 10, username: 'wangwu', password: '123456', role: 'ops', status: 'pending' },
+  /** 登录提示联调：已被拒绝 */
+  zhaoliu: { id: 11, username: 'zhaoliu', password: '123456', role: 'newbie', status: 'rejected' },
 }
 
+/** 待审核注册申请（可变） */
+export let MOCK_PENDING_USERS = [
+  {
+    id: 10,
+    username: 'wangwu',
+    role: 'ops',
+    status: 'pending',
+    created_at: '2026-09-17T10:00:00',
+  },
+  {
+    id: 12,
+    username: 'chenqi',
+    role: 'newbie',
+    status: 'pending',
+    created_at: '2026-09-18T09:30:00',
+  },
+]
+
+/** 已通过用户（可变；不含 pending/rejected） */
+export let MOCK_ACTIVE_USERS = [
+  { id: 1, username: 'admin', role: 'admin', status: 'active', created_at: '2026-09-01T08:00:00' },
+  { id: 2, username: 'zhangsan', role: 'ops', status: 'active', created_at: '2026-09-10T08:00:00' },
+  { id: 3, username: 'lisi', role: 'newbie', status: 'active', created_at: '2026-09-12T08:00:00' },
+]
+
+let _nextUserId = 100
+
+export function mockNextUserId() {
+  _nextUserId += 1
+  return _nextUserId
+}
+
+/** 文档空间（可变；空间管理页增删） */
 export const MOCK_DOC_SPACES = [
-  { id: 1, name: '客服文档' },
-  { id: 2, name: '运维文档' },
-  { id: 3, name: '新手指南' },
+  { id: 1, name: '客服文档', description: '一线客服常用排查手册' },
+  { id: 2, name: '运维文档', description: '运维与发布相关说明' },
+  { id: 3, name: '新手指南', description: '新人入职与权限申请' },
+]
+
+/** 已在本会话禁用的用户 id（真后端列表上叠加状态） */
+export const MOCK_DISABLED_USER_IDS = new Set()
+
+/** 已合并掉的缺口 id（列表不再展示） */
+export const MOCK_MERGED_GAP_IDS = new Set()
+
+/** 待审批文档 */
+export let MOCK_PENDING_DOCS = [
+  {
+    id: 201,
+    title: '退款时效说明（草案）',
+    submitter: 'zhangsan',
+    submitted_at: '2026-09-17T11:20:00',
+    status: 'pending',
+  },
+  {
+    id: 202,
+    title: '短信通道切换步骤',
+    submitter: 'lisi',
+    submitted_at: '2026-09-18T09:05:00',
+    status: 'pending',
+  },
+]
+
+/** 操作日志 */
+export let MOCK_LOGS = [
+  {
+    id: 1,
+    created_at: '2026-09-18T09:12:00',
+    operator: 'admin',
+    action: '上传文档',
+    detail: '支付回调超时排查手册',
+  },
+  {
+    id: 2,
+    created_at: '2026-09-17T16:40:00',
+    operator: 'admin',
+    action: '编辑文档',
+    detail: '订单导出超时说明',
+  },
+  {
+    id: 3,
+    created_at: '2026-09-17T15:02:00',
+    operator: 'admin',
+    action: '处理缺口',
+    detail: '新人怎么申请系统权限？',
+  },
+  {
+    id: 4,
+    created_at: '2026-09-16T11:18:00',
+    operator: 'admin',
+    action: '删除文档',
+    detail: '旧版回调地址说明',
+  },
+]
+
+let _nextLogId = 100
+
+/** 记一条 mock 操作日志 */
+export function pushMockLog({ operator, action, detail }) {
+  _nextLogId += 1
+  MOCK_LOGS.unshift({
+    id: _nextLogId,
+    created_at: new Date().toISOString().slice(0, 19),
+    operator: operator || 'admin',
+    action,
+    detail: detail || null,
+  })
+}
+
+/** 文档被引用次数（看板 Top5 / 列表列） */
+export const MOCK_DOC_CITATIONS = [
+  { document_id: 1, title: '支付回调超时排查手册', citation_count: 28 },
+  { document_id: 2, title: '订单导出超时说明', citation_count: 21 },
+  { document_id: 3, title: '新人入职 FAQ', citation_count: 14 },
+  { document_id: 4, title: '退款流程说明', citation_count: 9 },
+  { document_id: 5, title: '短信通道切换指南', citation_count: 6 },
 ]
 
 /** 可变列表，上传/编辑/删除会改它（会话内 mock） */

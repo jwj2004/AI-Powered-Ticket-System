@@ -1,13 +1,17 @@
 /**
  * HTTP 封装：原生 fetch + Bearer
- * D1 默认走 mock；接真后端时把 USE_MOCK 改为 false
+ * 默认走真后端；本地纯前端演示时可把 USE_MOCK 改为 true
  */
 import { getToken, clearAuth } from './authStorage'
+import { emitNetworkError } from './networkError'
 
 export const API_BASE = 'http://127.0.0.1:8000'
 
-/** D1：true = 前端 mock；A 接口就绪后改为 false */
-export const USE_MOCK = true
+/** false = 真后端；true = 前端 mock */
+export const USE_MOCK = false
+
+/** 默认超时（毫秒）；超时也视为网络异常 */
+const DEFAULT_TIMEOUT_MS = 30000
 
 export async function request(path, options = {}) {
   const headers = {
@@ -20,12 +24,29 @@ export async function request(path, options = {}) {
     headers.Authorization = `Bearer ${token}`
   }
 
-  const resp = await fetch(`${API_BASE}${path}`, {
-    ...options,
-    headers,
-  })
+  const timeoutMs = options.timeout ?? DEFAULT_TIMEOUT_MS
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), timeoutMs)
 
-  if (resp.status === 401) {
+  let resp
+  try {
+    resp = await fetch(`${API_BASE}${path}`, {
+      ...options,
+      headers,
+      signal: controller.signal,
+    })
+  } catch (e) {
+    // 断网 / 超时 / 后端未启动：顶部红条，避免白屏
+    emitNetworkError()
+    const err = new Error('网络异常，请检查后端服务')
+    err.network = true
+    err.detail = '网络异常，请检查后端服务'
+    throw err
+  } finally {
+    clearTimeout(timer)
+  }
+
+  if (resp.status === 401 && !options.skipAuthRedirect) {
     clearAuth()
     if (typeof window !== 'undefined' && !window.location.pathname.startsWith('/login')) {
       window.location.href = '/login'

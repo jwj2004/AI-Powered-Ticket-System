@@ -51,7 +51,8 @@ export async function chat({ message, conversation_id = null }) {
           { document_id: 1, title: '支付回调超时排查手册', chunk_index: 1 },
           { document_id: 1, title: '支付回调超时排查手册', chunk_index: 2 },
         ],
-        confidence: 'high',
+        // 与真后端文档召回对齐：有引用但未到错误码级 high
+        confidence: 'medium',
         message_id: mid,
       }
     } else {
@@ -140,7 +141,8 @@ export async function listConversations() {
       (b.updated_at || '').localeCompare(a.updated_at || ''),
     )
   }
-  return request('/api/conversations')
+  // A/B JWT 未统一前：会话接口 401 不踢登，避免问答页进不去、通知铃铛测不了
+  return request('/api/conversations', { skipAuthRedirect: true })
 }
 
 /** GET /api/conversations/{id}/messages */
