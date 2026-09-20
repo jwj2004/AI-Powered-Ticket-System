@@ -26,29 +26,12 @@
 - Base URL：`http://127.0.0.1:8000`；Vite：`http://127.0.0.1:5173`
 - 除 `/api/auth/login`、`/api/health` 外，请求头 `Authorization: Bearer <token>`
 - JWT 密钥固定为 `zhida-jwt-shared-2026`，必须与 A 一致，禁止改成别的默认值
-- 字段全部 snake_case；空值用 JSON `null`
-- 错误统一 `{"detail": "..."}` + 4xx/5xx
-- `confidence` 为 `"high"` / `"medium"` / `"low"`
-- 角色：`admin` / `ops` / `newbie`
-- 主问答：`POST /api/chat`，body `{ message, conversation_id }`；默认 SSE（meta / token / done）
-- citations：`{ document_id, title, chunk_index }`
-- `POST /api/feedback`：`{ message_id, useful }`
-- 低置信须用固定文案，并写入知识缺口（闲聊拒答除外）
-- 缺口/通知列表返回 `{ total, items }`（通知另含 unread）
-- 不要静默改契约字段名；要加字段走三人评审
-
-## 后端规则（偏 B，且约束全员）
-- 编排走 LangGraph；证据不足宁可不答
-- 不要把产品改回工单草稿主导链路（`/api/draft` 若残留仅作兼容，前端不走）
-- 不要修改 A 目录下的检索 / 文档 / 认证实现来「图省事」
-
-## 前端规则（偏 C，且约束全员）
-- 结构：`zhida_web/src/router/`、`views/`、`api/`（mock 可切换真后端）
-- mock 返回必须与接口契约字段一致
-- 问答打字机读 SSE 的 `token` 事件，不要等整段 JSON 再假动画
-- Vue 用 `<script setup>`，不要 Options API
-- 注释中文；函数短小；需要新 npm/Python 包先问
-- 不要替 A/B 写后端业务逻辑
+- 字段 snake_case，空值 null，错误 `{"detail":"..."}`
+- confidence 为 high / medium / low
+- 主接口 `POST /api/chat` 只写在 `app/api/chat.py`，body `{message, conversation_id}`
+- citations 为 `{document_id, title, chunk_index}`
+- 低置信必须带固定文案，并写入知识缺口（闲聊拒答除外）
+- 缺口/通知列表返回 `{total, items}`（通知另含 unread）
 
 ## 不要做的事
 - 不要上 MySQL/PostgreSQL/Redis（MVP 用 SQLite）
