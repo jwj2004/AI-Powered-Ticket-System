@@ -16,6 +16,29 @@ class CreateUserRequest(BaseModel):
     role: str = "newbie"
 
 
+@router.get("")
+def list_users(
+    db: Session = Depends(get_db),
+    user: User = Depends(require_admin),
+):
+    users = (
+        db.query(User)
+        .filter(User.status == "active")
+        .order_by(User.created_at.desc())
+        .all()
+    )
+    return [
+        {
+            "id": u.id,
+            "username": u.username,
+            "role": u.role,
+            "status": u.status,
+            "created_at": u.created_at.isoformat() if u.created_at else "",
+        }
+        for u in users
+    ]
+
+
 @router.post("")
 def create_new_user(
     req: CreateUserRequest,
