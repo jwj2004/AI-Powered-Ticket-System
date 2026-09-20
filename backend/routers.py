@@ -4,10 +4,11 @@ from __future__ import annotations
 
 from typing import Any, Literal, Optional
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import AliasChoices, BaseModel, ConfigDict, Field, field_validator
 
-from backend.agent.service import run_chat
+from backend.agent.service import iter_chat_sse, run_chat
 from backend.auth import CurrentUser, create_access_token, find_seed_user, get_current_user, require_admin
 from backend.clients.retrieve_client import RetrieveClient
 from backend import store
@@ -31,6 +32,7 @@ class ChatRequest(BaseModel):
         description="用户问题（契约字段名 message）",
     )
     conversation_id: Optional[int] = None
+    stream: Optional[bool] = None
 
     @field_validator("message")
     @classmethod
@@ -51,7 +53,7 @@ class ChatResponse(BaseModel):
     conversation_id: int
     reply: str
     citations: list[Citation] = Field(default_factory=list)
-    confidence: Literal["high", "low"]
+    confidence: Literal["high", "medium", "low"]
     message_id: int
     gap_id: Optional[int] = None
 
@@ -74,6 +76,21 @@ class ResolveGapRequest(BaseModel):
         return text
 
 
+def _wants_sse(body: ChatRequest, request: Request) -> bool:
+    """默认 SSE，前端打字机走真流式；仅显式要求 JSON 时同步返回。"""
+    if body.stream is True:
+        return True
+    if body.stream is False:
+        return False
+    accept = (request.headers.get("accept") or "").lower()
+    parts = [p.strip().split(";")[0] for p in accept.split(",") if p.strip()]
+    if "text/event-stream" in parts:
+        return True
+    if "application/json" in parts:
+        return False
+    return True
+
+
 @router.post("/api/auth/login")
 def login(body: LoginRequest) -> dict[str, Any]:
     """A 为正式登录源。B 提供种子账号，便于本模块单独联调。"""
@@ -88,10 +105,28 @@ def login(body: LoginRequest) -> dict[str, Any]:
     return {"token": token, "role": row["role"], "username": row["username"]}
 
 
-@router.post("/api/chat", response_model=ChatResponse, response_model_exclude_none=True)
-def chat(body: ChatRequest, user: CurrentUser = Depends(get_current_user)) -> ChatResponse:
+@router.post("/api/chat")
+def chat(
+    body: ChatRequest,
+    request: Request,
+    user: CurrentUser = Depends(get_current_user),
+) -> Any:
     store.init_db()
     try:
+        if _wants_sse(body, request):
+            return StreamingResponse(
+                iter_chat_sse(
+                    message=body.message,
+                    conversation_id=body.conversation_id,
+                    user=user,
+                ),
+                media_type="text/event-stream",
+                headers={
+                    "Cache-Control": "no-cache",
+                    "Connection": "keep-alive",
+                    "X-Accel-Buffering": "no",
+                },
+            )
         result = run_chat(
             message=body.message,
             conversation_id=body.conversation_id,
@@ -101,7 +136,7 @@ def chat(body: ChatRequest, user: CurrentUser = Depends(get_current_user)) -> Ch
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except Exception as exc:  # noqa: BLE001
         raise HTTPException(status_code=500, detail=f"问答失败: {exc}") from exc
-    return ChatResponse(**result)
+    return JSONResponse(ChatResponse(**result).model_dump(exclude_none=True))
 
 
 @router.post("/api/feedback")
@@ -157,10 +192,11 @@ def conversation_messages(
 
 
 @router.get("/api/gaps")
-def list_gaps(user: CurrentUser = Depends(get_current_user)) -> list[dict[str, Any]]:
+def list_gaps(user: CurrentUser = Depends(get_current_user)) -> dict[str, Any]:
     require_admin(user)
     store.init_db()
-    return store.list_gaps()
+    items = store.list_gaps()
+    return {"total": len(items), "items": items}
 
 
 @router.post("/api/gaps/{gap_id}/resolve")
@@ -185,9 +221,11 @@ def resolve_gap(
 
 
 @router.get("/api/notifications")
-def notifications(user: CurrentUser = Depends(get_current_user)) -> list[dict[str, Any]]:
+def notifications(user: CurrentUser = Depends(get_current_user)) -> dict[str, Any]:
     store.init_db()
-    return store.list_notifications(user.id)
+    items = store.list_notifications(user.id)
+    unread = sum(1 for item in items if not item.get("read"))
+    return {"total": len(items), "unread": unread, "items": items}
 
 
 @router.post("/api/notifications/{notification_id}/read")

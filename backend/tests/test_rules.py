@@ -21,6 +21,13 @@ def test_chunks_are_strong():
     assert rules.chunks_are_strong([]) is False
 
 
+def test_confidence_level_three_values():
+    assert rules.confidence_level([{"score": 0.9}]) == "high"
+    assert rules.confidence_level([{"score": 0.5}]) == "medium"
+    assert rules.confidence_level([{"score": 0.1}]) == "low"
+    assert rules.confidence_level([]) == "low"
+
+
 def test_citations_from_chunks():
     citations = rules.citations_from_chunks(
         [

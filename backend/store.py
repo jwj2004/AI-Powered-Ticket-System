@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import sqlite3
 from datetime import datetime
 from typing import Any, Optional
@@ -56,6 +57,16 @@ CREATE TABLE IF NOT EXISTS notification (
     answer TEXT NOT NULL,
     read INTEGER NOT NULL DEFAULT 0,
     created_at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS hot_cache (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    question_key TEXT NOT NULL UNIQUE,
+    reply TEXT NOT NULL,
+    citations_json TEXT NOT NULL DEFAULT '[]',
+    confidence TEXT NOT NULL,
+    hit_count INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
 );
 """
 
@@ -420,6 +431,81 @@ def list_notifications(user_id: int) -> list[dict[str, Any]]:
             }
             for row in rows
         ]
+    finally:
+        conn.close()
+
+
+_HOT_KEY_RE = re.compile(r"[\s？?！!。，,、.；;：:]+")
+
+
+def normalize_question_key(question: str) -> str:
+    return _HOT_KEY_RE.sub("", (question or "").strip().lower())
+
+
+def get_hot_cache(question: str, *, min_hits: int) -> Optional[dict[str, Any]]:
+    """高频且已有高质量答案时直接返回缓存。"""
+    key = normalize_question_key(question)
+    if not key:
+        return None
+    conn = get_conn()
+    try:
+        row = conn.execute(
+            "SELECT * FROM hot_cache WHERE question_key = ?",
+            (key,),
+        ).fetchone()
+        if not row:
+            return None
+        if int(row["hit_count"]) < min_hits:
+            return None
+        if row["confidence"] not in {"high", "medium"}:
+            return None
+        ts = now_iso()
+        conn.execute(
+            "UPDATE hot_cache SET hit_count = hit_count + 1, updated_at = ? WHERE question_key = ?",
+            (ts, key),
+        )
+        conn.commit()
+        return {
+            "reply": row["reply"],
+            "citations": json.loads(row["citations_json"] or "[]"),
+            "confidence": row["confidence"],
+            "from_cache": True,
+        }
+    finally:
+        conn.close()
+
+
+def save_hot_cache(
+    question: str,
+    *,
+    reply: str,
+    citations: list[dict[str, Any]],
+    confidence: str,
+) -> None:
+    if confidence not in {"high", "medium"} or not (reply or "").strip():
+        return
+    key = normalize_question_key(question)
+    if not key:
+        return
+    ts = now_iso()
+    citations_json = json.dumps(citations or [], ensure_ascii=False)
+    conn = get_conn()
+    try:
+        conn.execute(
+            """
+            INSERT INTO hot_cache (
+                question_key, reply, citations_json, confidence, hit_count, created_at, updated_at
+            ) VALUES (?, ?, ?, ?, 1, ?, ?)
+            ON CONFLICT(question_key) DO UPDATE SET
+                reply = excluded.reply,
+                citations_json = excluded.citations_json,
+                confidence = excluded.confidence,
+                hit_count = hot_cache.hit_count + 1,
+                updated_at = excluded.updated_at
+            """,
+            (key, reply, citations_json, confidence, ts, ts),
+        )
+        conn.commit()
     finally:
         conn.close()
 

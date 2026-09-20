@@ -2,27 +2,7 @@
 
 from __future__ import annotations
 
-import pytest
 from fastapi.testclient import TestClient
-
-from backend.agent import graph as graph_mod
-from backend.config import get_settings
-
-
-@pytest.fixture
-def client(tmp_path, monkeypatch):
-    monkeypatch.setenv("DATABASE_PATH", str(tmp_path / "zhida_b.db"))
-    monkeypatch.setenv("USE_MOCK_RETRIEVE", "true")
-    monkeypatch.setenv("JWT_SECRET", "zhida-jwt-shared-2026")
-    monkeypatch.setenv("LLM_API_KEY", "")
-    get_settings.cache_clear()
-    graph_mod._GRAPH = None
-
-    from backend.main import app
-    from backend import store
-
-    store.init_db()
-    return TestClient(app)
 
 
 def _login(client: TestClient, username: str = "ops", password: str = "ops123") -> str:
@@ -31,8 +11,8 @@ def _login(client: TestClient, username: str = "ops", password: str = "ops123") 
     return resp.json()["token"]
 
 
-def _auth(token: str) -> dict[str, str]:
-    return {"Authorization": f"Bearer {token}"}
+def _auth(token: str, *, accept: str = "application/json") -> dict[str, str]:
+    return {"Authorization": f"Bearer {token}", "Accept": accept}
 
 
 def test_login_and_health(client: TestClient):
@@ -147,7 +127,7 @@ def test_multiturn_and_history_endpoints(client: TestClient):
     assert roles.count("assistant") == 2
     last = msgs.json()[-1]
     assert last["message_id"] == second.json()["message_id"]
-    assert last["confidence"] in {"high", "low"}
+    assert last["confidence"] in {"high", "medium", "low"}
 
 
 def test_feedback_and_gap_resolve_notifies_user(client: TestClient):
@@ -172,7 +152,9 @@ def test_feedback_and_gap_resolve_notifies_user(client: TestClient):
 
     gaps = client.get("/api/gaps", headers=_auth(admin_token))
     assert gaps.status_code == 200
-    assert any(g["gap_id"] == gap_id for g in gaps.json())
+    gap_payload = gaps.json()
+    assert gap_payload["total"] >= 1
+    assert any(g["gap_id"] == gap_id for g in gap_payload["items"])
 
     resolved = client.post(
         f"/api/gaps/{gap_id}/resolve",
@@ -185,10 +167,13 @@ def test_feedback_and_gap_resolve_notifies_user(client: TestClient):
 
     notes = client.get("/api/notifications", headers=_auth(ops_token))
     assert notes.status_code == 200
-    assert notes.json()[0]["gap_id"] == gap_id
-    assert notes.json()[0]["read"] is False
+    note_payload = notes.json()
+    assert note_payload["total"] >= 1
+    assert note_payload["unread"] >= 1
+    assert note_payload["items"][0]["gap_id"] == gap_id
+    assert note_payload["items"][0]["read"] is False
 
-    nid = notes.json()[0]["notification_id"]
+    nid = note_payload["items"][0]["notification_id"]
     read = client.post(f"/api/notifications/{nid}/read", headers=_auth(ops_token))
     assert read.json() == {"ok": True}
 

@@ -26,8 +26,20 @@ class Settings(BaseSettings):
     retrieve_timeout_seconds: float = 10.0
     use_mock_retrieve: bool = True
 
-    # 文档块相似度阈值：低于此值视为证据不足
+    # 文档块相似度阈值：低于 medium 视为证据不足
     high_score_threshold: float = 0.75
+    medium_score_threshold: float = 0.45
+
+    # 检索增强：候选池 → BM25+向量融合 → cross-encoder 重排
+    retrieve_candidate_k: int = 10
+    retrieve_top_k: int = 5
+    enable_query_rewrite: bool = True
+    enable_hybrid_retrieve: bool = True
+    enable_cross_encoder: bool = False
+    cross_encoder_model: str = "cross-encoder/ms-marco-MiniLM-L-6-v2"
+
+    # 热门问题缓存：命中次数达到阈值后直接返回缓存答案
+    hot_cache_min_hits: int = 3
 
     # B 自己的会话 / 缺口 / 通知库（不碰 A 的 SQLite）
     database_path: str = "./backend/data/zhida_b.db"
