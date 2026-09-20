@@ -38,6 +38,8 @@ def authenticate(db: Session, username: str, password: str) -> dict:
         raise PermissionError("账号待审核，请等待管理员通过")
     if user.status == "rejected":
         raise PermissionError("账号已被拒绝")
+    if user.status == "disabled":
+        raise PermissionError("账号已被禁用")
 
     token = create_access_token(user.id, user.username, user.role)
     log.info(f"用户登录: {username}")
