@@ -20,6 +20,7 @@ from app.services.document_service import (
     rollback_document,
 )
 from app.api.doc_spaces import filter_spaces_by_role
+from app.services.log_service import log_action
 
 router = APIRouter(prefix="/api/documents", tags=["文档管理"])
 
@@ -134,6 +135,7 @@ async def upload_document(
         content=text, content_type=ext, owner_id=user.id,
     )
     chunk_count = db.query(Document).filter(Document.id == doc.id).first()
+    log_action(db, user.id, user.username, "upload_document", resource=f"doc:{doc.id}", detail=file.filename)
     return {"id": doc.id, "title": doc.title, "chunks": chunk_count.version if chunk_count else 0}
 
 
@@ -203,6 +205,7 @@ def approve_document(
     if not doc:
         raise HTTPException(status_code=404, detail="文档不存在")
     doc.approved = True
+    log_action(db, user.id, user.username, "approve_document", resource=f"doc:{doc_id}", detail=doc.title)
     db.commit()
     return {"ok": True}
 
@@ -216,6 +219,8 @@ def reject_document(
     doc = db.query(Document).filter(Document.id == doc_id).first()
     if not doc:
         raise HTTPException(status_code=404, detail="文档不存在")
-    doc.approved = False
+    title = doc.title
+    delete_document(db, doc_id)
+    log_action(db, user.id, user.username, "reject_document", resource=f"doc:{doc_id}", detail=title)
     db.commit()
     return {"ok": True}

@@ -277,7 +277,7 @@ class TestDocumentApproval:
         r = client.post(f"/api/documents/{doc_id}/reject", headers=admin_headers)
         assert r.status_code == 200
         doc_r = client.get(f"/api/documents/{doc_id}", headers=admin_headers)
-        assert doc_r.json()["approved"] is False
+        assert doc_r.status_code == 404
 
     def test_approve_non_admin(self, client, newbie_headers, admin_headers, db_session):
         from app.models.doc_space import DocSpace
