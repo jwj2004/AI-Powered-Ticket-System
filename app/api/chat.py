@@ -161,7 +161,7 @@ def feedback(
     if not msg:
         raise HTTPException(status_code=404, detail="消息不存在")
 
-    fb = Feedback(message_id=req.message_id, useful=req.useful, comment=req.comment)
+    fb = Feedback(message_id=req.message_id, user_id=user.id, useful=req.useful, comment=req.comment)
     db.add(fb)
     db.commit()
     return {"ok": True}
