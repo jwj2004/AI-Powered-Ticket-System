@@ -447,3 +447,52 @@ class TestRoleIsolation:
         spaces = client.get("/api/doc-spaces", headers=admin_headers).json()
         created = [s for s in spaces if s["name"] == "测试角色空间"][0]
         assert created["role"] == "ops"
+
+
+class TestDocCitations:
+    def test_doc_citations_empty(self, client, admin_headers):
+        r = client.get("/api/stats/doc-citations", headers=admin_headers)
+        assert r.status_code == 200
+        assert r.json() == []
+
+    def test_doc_citations_after_chat(self, client, admin_headers, db_session):
+        import json as json_mod
+        from app.models.conversation import Conversation
+        from app.models.message import Message
+        conv = Conversation(user_id=1, title="引用测试")
+        db_session.add(conv)
+        db_session.commit()
+        citations_json = json_mod.dumps([{"document_id": 1, "title": "doc1", "chunk_index": 0}])
+        msg = Message(conversation_id=conv.id, role="assistant", content="reply", citations_json=citations_json, confidence="high")
+        db_session.add(msg)
+        db_session.commit()
+
+        r = client.get("/api/stats/doc-citations", headers=admin_headers)
+        assert r.status_code == 200
+        assert len(r.json()) >= 1
+        assert r.json()[0]["document_id"] == 1
+        assert r.json()[0]["citations"] >= 1
+
+    def test_doc_citations_top5(self, client, admin_headers, db_session):
+        import json as json_mod
+        from app.models.conversation import Conversation
+        from app.models.message import Message
+        conv = Conversation(user_id=1, title="Top5测试")
+        db_session.add(conv)
+        db_session.commit()
+        for doc_id in [1, 1, 1, 2, 2, 3, 4, 5, 6]:
+            citations_json = json_mod.dumps([{"document_id": doc_id, "title": f"doc{doc_id}", "chunk_index": 0}])
+            msg = Message(conversation_id=conv.id, role="assistant", content="reply", citations_json=citations_json, confidence="high")
+            db_session.add(msg)
+        db_session.commit()
+
+        r = client.get("/api/stats/doc-citations", headers=admin_headers)
+        assert r.status_code == 200
+        data = r.json()
+        assert len(data) <= 5
+        assert data[0]["document_id"] == 1
+        assert data[0]["citations"] == 3
+
+    def test_doc_citations_non_admin(self, client, newbie_headers):
+        r = client.get("/api/stats/doc-citations", headers=newbie_headers)
+        assert r.status_code == 403
