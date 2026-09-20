@@ -58,3 +58,18 @@ def list_messages(
         }
         for m in messages
     ]
+
+
+@router.delete("/{conv_id}")
+def delete_conversation(
+    conv_id: int,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    conv = db.query(Conversation).filter(Conversation.id == conv_id).first()
+    if not conv or conv.user_id != user.id:
+        raise HTTPException(status_code=404, detail="会话不存在")
+    db.query(Message).filter(Message.conversation_id == conv_id).delete()
+    db.delete(conv)
+    db.commit()
+    return {"ok": True}
