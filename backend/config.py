@@ -41,8 +41,9 @@ class Settings(BaseSettings):
     # 热门问题缓存：命中次数达到阈值后直接返回缓存答案
     hot_cache_min_hits: int = 3
 
-    # B 自己的会话 / 缺口 / 通知库（不碰 A 的 SQLite）
-    database_path: str = "./backend/data/zhida_b.db"
+    # 与 A 共用同一份 SQLite。不要再用 zhida_b.db，否则会话列表和问答会错位
+    database_url: str = "sqlite:///./db/zhida.db"
+    database_path: str = ""
 
     # JWT：必须与 A 的 jwt_secret 一致，否则 A 签发的 token 会被 B 判无效
     jwt_secret: str = SHARED_JWT_SECRET
@@ -59,3 +60,14 @@ class Settings(BaseSettings):
 @lru_cache
 def get_settings() -> Settings:
     return Settings()
+
+
+def sqlite_path() -> str:
+    """解析出 SQLite 文件路径。测试里 DATABASE_PATH 优先；联调走 A 的 zhida.db。"""
+    settings = get_settings()
+    if (settings.database_path or "").strip():
+        return settings.database_path.strip()
+    url = (settings.database_url or "").strip()
+    if url.startswith("sqlite:///"):
+        return url[len("sqlite:///") :]
+    return "./db/zhida.db"
