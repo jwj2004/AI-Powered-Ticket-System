@@ -496,3 +496,46 @@ class TestDocCitations:
     def test_doc_citations_non_admin(self, client, newbie_headers):
         r = client.get("/api/stats/doc-citations", headers=newbie_headers)
         assert r.status_code == 403
+
+
+class TestFAQCRUD:
+    def test_create_and_update_faq(self, client, admin_headers):
+        create_r = client.post("/api/faq", json={"question": "原问题", "answer": "原答案"}, headers=admin_headers)
+        assert create_r.status_code == 200
+        faq_id = create_r.json()["id"]
+
+        r = client.put(f"/api/faq/{faq_id}", json={"question": "新问题", "answer": "新答案"}, headers=admin_headers)
+        assert r.status_code == 200
+        assert r.json()["ok"] is True
+
+        faq_list = client.get("/api/faq", headers=admin_headers).json()
+        updated = [f for f in faq_list if f["id"] == faq_id][0]
+        assert updated["question"] == "新问题"
+        assert updated["answer"] == "新答案"
+
+    def test_update_nonexistent_faq(self, client, admin_headers):
+        r = client.put("/api/faq/999", json={"question": "x", "answer": "y"}, headers=admin_headers)
+        assert r.status_code == 404
+
+    def test_delete_faq(self, client, admin_headers):
+        create_r = client.post("/api/faq", json={"question": "待删除", "answer": "答案"}, headers=admin_headers)
+        faq_id = create_r.json()["id"]
+
+        r = client.delete(f"/api/faq/{faq_id}", headers=admin_headers)
+        assert r.status_code == 200
+        assert r.json()["ok"] is True
+
+        faq_list = client.get("/api/faq", headers=admin_headers).json()
+        assert all(f["id"] != faq_id for f in faq_list)
+
+    def test_delete_nonexistent_faq(self, client, admin_headers):
+        r = client.delete("/api/faq/999", headers=admin_headers)
+        assert r.status_code == 404
+
+    def test_update_faq_non_admin(self, client, newbie_headers):
+        r = client.put("/api/faq/1", json={"question": "x", "answer": "y"}, headers=newbie_headers)
+        assert r.status_code == 403
+
+    def test_delete_faq_non_admin(self, client, newbie_headers):
+        r = client.delete("/api/faq/1", headers=newbie_headers)
+        assert r.status_code == 403

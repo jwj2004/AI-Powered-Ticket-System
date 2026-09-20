@@ -46,3 +46,38 @@ def create_faq(
     db.commit()
     db.refresh(faq)
     return {"id": faq.id, "ok": True}
+
+
+class FAQUpdateRequest(BaseModel):
+    question: str
+    answer: str
+
+
+@router.put("/{faq_id}")
+def update_faq(
+    faq_id: int,
+    req: FAQUpdateRequest,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_admin),
+):
+    faq = db.query(FAQ).filter(FAQ.id == faq_id).first()
+    if not faq:
+        raise HTTPException(status_code=404, detail="FAQ 不存在")
+    faq.question = req.question
+    faq.answer = req.answer
+    db.commit()
+    return {"ok": True}
+
+
+@router.delete("/{faq_id}")
+def delete_faq(
+    faq_id: int,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_admin),
+):
+    faq = db.query(FAQ).filter(FAQ.id == faq_id).first()
+    if not faq:
+        raise HTTPException(status_code=404, detail="FAQ 不存在")
+    db.delete(faq)
+    db.commit()
+    return {"ok": True}
