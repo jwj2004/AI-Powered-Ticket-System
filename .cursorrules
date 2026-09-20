@@ -18,7 +18,7 @@
 - JWT 密钥固定为 `zhida-jwt-shared-2026`，必须与 A 一致，禁止改成别的默认值
 - 字段 snake_case，空值 null，错误 `{"detail":"..."}`
 - confidence 为 high / medium / low
-- 主接口 `POST /api/chat`，body `{message, conversation_id}`
+- 主接口 `POST /api/chat` 只写在 `app/api/chat.py`，body `{message, conversation_id}`
 - citations 为 `{document_id, title, chunk_index}`
 - 低置信必须带固定文案，并写入知识缺口（闲聊拒答除外）
 - 缺口/通知列表返回 `{total, items}`（通知另含 unread）

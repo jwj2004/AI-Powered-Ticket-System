@@ -11,6 +11,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from backend.config import get_settings
 from backend.routers import router as b_router
+from app.api.chat import router as chat_router
 from backend import store
 
 logging.basicConfig(
@@ -42,6 +43,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+app.include_router(chat_router)
 app.include_router(b_router)
 
 

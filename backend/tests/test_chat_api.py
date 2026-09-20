@@ -222,3 +222,14 @@ def test_accepts_token_payload_shape_from_a(client: TestClient):
     )
     resp = client.get("/api/conversations", headers=_auth(token))
     assert resp.status_code == 200
+
+
+def test_chat_route_registered_once(client: TestClient):
+    from backend.main import app
+
+    chat_paths = [
+        getattr(route, "path", None)
+        for route in app.routes
+        if getattr(route, "path", None) == "/api/chat"
+    ]
+    assert chat_paths == ["/api/chat"]

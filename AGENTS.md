@@ -25,7 +25,7 @@
 ## 三、B 对外接口（契约 v3）
 
 - `POST /api/auth/login` — 仅供 B 独立联调的种子账号（admin/ops/newbie）
-- `POST /api/chat` — 默认 SSE：`meta` → `token*` → `done`；JSON 兼容 `{ conversation_id, reply, citations, confidence, message_id, gap_id? }`
+- `POST /api/chat` — 实现只在 `app/api/chat.py`（默认 SSE：`meta` → `token*` → `done`；`Accept: application/json` 或 `stream=false` 时同步 JSON）。`backend/routers.py` 不再注册该路径。
 - `POST /api/feedback` — `{ message_id, useful }`
 - `GET /api/conversations`
 - `GET /api/conversations/{id}/messages`

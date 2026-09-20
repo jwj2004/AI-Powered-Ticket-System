@@ -1,14 +1,15 @@
-"""B 负责的 HTTP 路由：登录（独立联调）、问答、会话、反馈、缺口闭环、通知。"""
+"""B 负责的 HTTP 路由：登录（独立联调）、会话、反馈、缺口闭环、通知。
+
+问答入口只在 app/api/chat.py，这里不再注册 /api/chat。
+"""
 
 from __future__ import annotations
 
-from typing import Any, Literal, Optional
+from typing import Any, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Request
-from fastapi.responses import JSONResponse, StreamingResponse
-from pydantic import AliasChoices, BaseModel, ConfigDict, Field, field_validator
+from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel, field_validator
 
-from backend.agent.service import iter_chat_sse, run_chat
 from backend.auth import CurrentUser, create_access_token, find_seed_user, get_current_user, require_admin
 from backend.clients.retrieve_client import RetrieveClient
 from backend import store
@@ -19,43 +20,6 @@ router = APIRouter()
 class LoginRequest(BaseModel):
     username: str
     password: str
-
-
-class ChatRequest(BaseModel):
-    """契约字段为 message。联调期间若前端仍传 query，也映射到 message。"""
-
-    model_config = ConfigDict(populate_by_name=True)
-
-    message: str = Field(
-        ...,
-        validation_alias=AliasChoices("message", "query"),
-        description="用户问题（契约字段名 message）",
-    )
-    conversation_id: Optional[int] = None
-    stream: Optional[bool] = None
-
-    @field_validator("message")
-    @classmethod
-    def message_not_blank(cls, value: str) -> str:
-        text = value.strip()
-        if not text:
-            raise ValueError("message 不能为空")
-        return text
-
-
-class Citation(BaseModel):
-    document_id: int
-    title: str
-    chunk_index: int
-
-
-class ChatResponse(BaseModel):
-    conversation_id: int
-    reply: str
-    citations: list[Citation] = Field(default_factory=list)
-    confidence: Literal["high", "medium", "low"]
-    message_id: int
-    gap_id: Optional[int] = None
 
 
 class FeedbackRequest(BaseModel):
@@ -76,21 +40,6 @@ class ResolveGapRequest(BaseModel):
         return text
 
 
-def _wants_sse(body: ChatRequest, request: Request) -> bool:
-    """默认 SSE，前端打字机走真流式；仅显式要求 JSON 时同步返回。"""
-    if body.stream is True:
-        return True
-    if body.stream is False:
-        return False
-    accept = (request.headers.get("accept") or "").lower()
-    parts = [p.strip().split(";")[0] for p in accept.split(",") if p.strip()]
-    if "text/event-stream" in parts:
-        return True
-    if "application/json" in parts:
-        return False
-    return True
-
-
 @router.post("/api/auth/login")
 def login(body: LoginRequest) -> dict[str, Any]:
     """A 为正式登录源。B 提供种子账号，便于本模块单独联调。"""
@@ -103,40 +52,6 @@ def login(body: LoginRequest) -> dict[str, Any]:
         role=row["role"],
     )
     return {"token": token, "role": row["role"], "username": row["username"]}
-
-
-@router.post("/api/chat")
-def chat(
-    body: ChatRequest,
-    request: Request,
-    user: CurrentUser = Depends(get_current_user),
-) -> Any:
-    store.init_db()
-    try:
-        if _wants_sse(body, request):
-            return StreamingResponse(
-                iter_chat_sse(
-                    message=body.message,
-                    conversation_id=body.conversation_id,
-                    user=user,
-                ),
-                media_type="text/event-stream",
-                headers={
-                    "Cache-Control": "no-cache",
-                    "Connection": "keep-alive",
-                    "X-Accel-Buffering": "no",
-                },
-            )
-        result = run_chat(
-            message=body.message,
-            conversation_id=body.conversation_id,
-            user=user,
-        )
-    except PermissionError as exc:
-        raise HTTPException(status_code=404, detail=str(exc)) from exc
-    except Exception as exc:  # noqa: BLE001
-        raise HTTPException(status_code=500, detail=f"问答失败: {exc}") from exc
-    return JSONResponse(ChatResponse(**result).model_dump(exclude_none=True))
 
 
 @router.post("/api/feedback")
@@ -152,7 +67,6 @@ def feedback(body: FeedbackRequest, user: CurrentUser = Depends(get_current_user
 
     store.add_feedback(body.message_id, user.id, body.useful)
 
-    # 踩多了进入缺口榜单
     if not body.useful and store.count_thumbs_down(body.message_id) >= 1:
         if not msg.get("gap_id"):
             conv_messages = store.list_messages(msg["conversation_id"])
