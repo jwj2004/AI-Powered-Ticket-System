@@ -1,4 +1,6 @@
-import { USE_MOCK, request } from './http'
+import { API_BASE, USE_MOCK, request } from './http'
+import { getToken } from './authStorage'
+import { emitNetworkError } from './networkError'
 import {
   MOCK_CONVERSATIONS,
   MOCK_CONVERSATION_MESSAGES,
@@ -100,11 +102,94 @@ export async function chat({ message, conversation_id = null }) {
 
   return request('/api/chat', {
     method: 'POST',
+    headers: { Accept: 'application/json' },
     body: JSON.stringify({
       message,
       conversation_id: conversation_id ?? null,
+      stream: false,
     }),
   })
+}
+
+/**
+ * POST /api/chat 默认 SSE：meta → token* → done
+ * onMeta / onToken(delta) / onDone
+ */
+export async function chatStream({ message, conversation_id = null }, handlers = {}) {
+  const headers = {
+    'Content-Type': 'application/json',
+    Accept: 'text/event-stream',
+  }
+  const token = getToken()
+  if (token) headers.Authorization = `Bearer ${token}`
+
+  let resp
+  try {
+    resp = await fetch(`${API_BASE}/api/chat`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        message,
+        conversation_id: conversation_id ?? null,
+      }),
+      signal: handlers.signal,
+    })
+  } catch (e) {
+    if (e.name === 'AbortError') throw e
+    emitNetworkError()
+    const err = new Error('网络异常，请检查后端服务')
+    err.network = true
+    err.detail = err.message
+    throw err
+  }
+
+  if (!resp.ok) {
+    const data = await resp.json().catch(() => ({}))
+    const err = new Error(data.detail || `请求失败（${resp.status}）`)
+    err.status = resp.status
+    err.detail = data.detail
+    throw err
+  }
+
+  const reader = resp.body?.getReader()
+  if (!reader) {
+    const err = new Error('浏览器不支持流式读取')
+    err.detail = err.message
+    throw err
+  }
+
+  const decoder = new TextDecoder()
+  let buf = ''
+  while (true) {
+    const { value, done } = await reader.read()
+    if (done) break
+    buf += decoder.decode(value, { stream: true })
+    const blocks = buf.split('\n\n')
+    buf = blocks.pop() || ''
+    for (const block of blocks) {
+      dispatchSseBlock(block, handlers)
+    }
+  }
+  if (buf.trim()) dispatchSseBlock(buf, handlers)
+}
+
+function dispatchSseBlock(block, handlers) {
+  let event = 'message'
+  const dataLines = []
+  for (const line of block.split('\n')) {
+    if (line.startsWith('event:')) event = line.slice(6).trim()
+    else if (line.startsWith('data:')) dataLines.push(line.slice(5).trim())
+  }
+  if (!dataLines.length) return
+  let data
+  try {
+    data = JSON.parse(dataLines.join(''))
+  } catch (e) {
+    return
+  }
+  if (event === 'meta' && handlers.onMeta) handlers.onMeta(data)
+  else if (event === 'token' && handlers.onToken) handlers.onToken(data.delta || '')
+  else if (event === 'done' && handlers.onDone) handlers.onDone(data)
 }
 
 /** 点击引用时取 chunk 详情（mock） */

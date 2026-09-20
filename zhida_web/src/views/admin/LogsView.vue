@@ -3,7 +3,7 @@
     <div class="toolbar">
       <div>
         <h2>操作日志</h2>
-        <p class="muted">上传 / 编辑 / 删除文档、处理缺口等（mock）</p>
+        <p class="muted">上传 / 编辑 / 删除文档、处理缺口等</p>
       </div>
     </div>
 

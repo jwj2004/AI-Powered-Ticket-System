@@ -41,7 +41,6 @@ export async function resolveGap(gapId, { answer, document_id = null }) {
 /**
  * POST /api/gaps/{gap_id}/merge
  * body: { target_gap_id }
- * 后端未就绪，固定走 mock：源缺口从列表消失
  */
 export async function mergeGaps(sourceId, targetId) {
   const source = Number(sourceId)
@@ -56,13 +55,21 @@ export async function mergeGaps(sourceId, targetId) {
     err.detail = '不能与自身合并'
     throw err
   }
-  MOCK_MERGED_GAP_IDS.add(source)
-  const idx = MOCK_GAPS.findIndex((g) => g.gap_id === source)
-  const removed = idx >= 0 ? MOCK_GAPS.splice(idx, 1)[0] : null
-  pushMockLog({
-    operator: getUsername() || 'admin',
-    action: '合并缺口',
-    detail: removed?.question || `#${source} → #${target}`,
+
+  if (USE_MOCK) {
+    MOCK_MERGED_GAP_IDS.add(source)
+    const idx = MOCK_GAPS.findIndex((g) => g.gap_id === source)
+    const removed = idx >= 0 ? MOCK_GAPS.splice(idx, 1)[0] : null
+    pushMockLog({
+      operator: getUsername() || 'admin',
+      action: '合并缺口',
+      detail: removed?.question || `#${source} → #${target}`,
+    })
+    return { ok: true, merged_into: target }
+  }
+
+  return request(`/api/gaps/${source}/merge`, {
+    method: 'POST',
+    body: JSON.stringify({ target_gap_id: target }),
   })
-  return { ok: true, merged_into: target }
 }

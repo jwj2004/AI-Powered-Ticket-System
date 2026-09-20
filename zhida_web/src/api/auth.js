@@ -107,7 +107,6 @@ export async function createUser({ username, password, role }) {
 
 /**
  * POST /api/auth/change-password
- * 后端未就绪，固定走 mock，不请求真接口
  * body: { old_password, new_password }
  */
 export async function changePassword({ old_password, new_password }) {
@@ -128,11 +127,26 @@ export async function changePassword({ old_password, new_password }) {
     err.detail = '新密码不能与旧密码相同'
     throw err
   }
-  const name = getUsername()
-  const user = name ? MOCK_USERS[name] : null
-  if (user) user.password = nextPwd
-  pushMockLog({ operator: name || 'admin', action: '修改密码', detail: name || '' })
-  return { ok: true }
+
+  if (USE_MOCK) {
+    const name = getUsername()
+    const user = name ? MOCK_USERS[name] : null
+    if (user) {
+      if (user.password !== oldPwd) {
+        const err = new Error('原密码错误')
+        err.detail = '原密码错误'
+        throw err
+      }
+      user.password = nextPwd
+    }
+    pushMockLog({ operator: name || 'admin', action: '修改密码', detail: name || '' })
+    return { ok: true }
+  }
+
+  return request('/api/auth/change-password', {
+    method: 'POST',
+    body: JSON.stringify({ old_password: oldPwd, new_password: nextPwd }),
+  })
 }
 
 /** GET /api/doc-spaces */

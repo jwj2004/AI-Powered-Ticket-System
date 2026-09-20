@@ -3,7 +3,7 @@
     <div class="toolbar">
       <div>
         <h2>待审批文档</h2>
-        <p class="muted">未审批文档 · 通过或拒绝（mock）</p>
+        <p class="muted">未审批文档 · 通过或拒绝</p>
       </div>
     </div>
 
