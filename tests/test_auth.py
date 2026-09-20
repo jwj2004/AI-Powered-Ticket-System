@@ -207,3 +207,32 @@ class TestListUsers:
     def test_list_users_non_admin(self, client, newbie_headers):
         r = client.get("/api/users", headers=newbie_headers)
         assert r.status_code == 403
+
+
+class TestUpdateRole:
+    def test_change_role_to_ops(self, client, admin_headers):
+        r = client.patch("/api/users/3", json={"role": "ops"}, headers=admin_headers)
+        assert r.status_code == 200
+        assert r.json()["ok"] is True
+
+    def test_change_role_to_newbie(self, client, admin_headers):
+        r = client.patch("/api/users/2", json={"role": "newbie"}, headers=admin_headers)
+        assert r.status_code == 200
+        assert r.json()["ok"] is True
+
+    def test_change_role_self(self, client, admin_headers):
+        r = client.patch("/api/users/1", json={"role": "ops"}, headers=admin_headers)
+        assert r.status_code == 400
+        assert "自己" in r.json()["detail"]
+
+    def test_change_role_invalid(self, client, admin_headers):
+        r = client.patch("/api/users/2", json={"role": "superadmin"}, headers=admin_headers)
+        assert r.status_code == 400
+
+    def test_change_role_nonexistent(self, client, admin_headers):
+        r = client.patch("/api/users/999", json={"role": "ops"}, headers=admin_headers)
+        assert r.status_code == 404
+
+    def test_change_role_non_admin(self, client, newbie_headers):
+        r = client.patch("/api/users/2", json={"role": "ops"}, headers=newbie_headers)
+        assert r.status_code == 403
