@@ -199,7 +199,8 @@
 import { computed, nextTick, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { getUsername, getRole, clearAuth } from '../api/authStorage'
-import { chat, sendFeedback, getCitationChunk, listConversations, listMessages } from '../api/chat'
+import { chat, chatStream, sendFeedback, getCitationChunk, listConversations, listMessages } from '../api/chat'
+import { USE_MOCK } from '../api/http'
 import { listNotifications, markNotificationRead } from '../api/notifications'
 import { typewrite } from '../utils/typewriter'
 import UserMenu from '../components/UserMenu.vue'
@@ -337,46 +338,91 @@ async function onSend() {
   const myToken = ++typeToken
 
   try {
-    const data = await chat({
-      message: text,
-      conversation_id: conversationId.value,
-    })
-    if (myToken !== typeToken) return
+    if (USE_MOCK) {
+      const data = await chat({
+        message: text,
+        conversation_id: conversationId.value,
+      })
+      if (myToken !== typeToken) return
 
-    conversationId.value = data.conversation_id
-    const reply = data.reply || ''
-    messages.value.push({
-      role: 'assistant',
-      content: '',
-      citations: data.citations || [],
-      confidence: data.confidence,
-      message_id: data.message_id,
-      gap_id: data.gap_id ?? null,
-      feedback: null,
-      typing: true,
-      copied: false,
-    })
-    // 取数组内响应式对象再写 content，避免打字机不刷新
-    const msg = messages.value[messages.value.length - 1]
-    loading.value = false
-    await scrollToBottom()
+      conversationId.value = data.conversation_id
+      const reply = data.reply || ''
+      messages.value.push({
+        role: 'assistant',
+        content: '',
+        citations: data.citations || [],
+        confidence: data.confidence,
+        message_id: data.message_id,
+        gap_id: data.gap_id ?? null,
+        feedback: null,
+        typing: true,
+        copied: false,
+      })
+      const msg = messages.value[messages.value.length - 1]
+      loading.value = false
+      await scrollToBottom()
 
-    // 本地打字机；后端 SSE 就绪后可改为流式写入 content
-    await typewrite(
-      reply,
-      (partial) => {
-        msg.content = partial
-        if (partial.length % 8 === 0) scrollToBottom()
-      },
-      {
-        interval: 18,
-        shouldContinue: () => myToken === typeToken,
-      },
-    )
+      await typewrite(
+        reply,
+        (partial) => {
+          msg.content = partial
+          if (partial.length % 8 === 0) scrollToBottom()
+        },
+        {
+          interval: 18,
+          shouldContinue: () => myToken === typeToken,
+        },
+      )
 
-    if (myToken !== typeToken) return
-    msg.content = reply
-    msg.typing = false
+      if (myToken !== typeToken) return
+      msg.content = reply
+      msg.typing = false
+    } else {
+      messages.value.push({
+        role: 'assistant',
+        content: '',
+        citations: [],
+        confidence: null,
+        message_id: null,
+        gap_id: null,
+        feedback: null,
+        typing: true,
+        copied: false,
+      })
+      const msg = messages.value[messages.value.length - 1]
+      loading.value = false
+      await scrollToBottom()
+
+      await chatStream(
+        { message: text, conversation_id: conversationId.value },
+        {
+          onMeta(meta) {
+            if (myToken !== typeToken) return
+            conversationId.value = meta.conversation_id
+            msg.citations = meta.citations || []
+            msg.confidence = meta.confidence
+            msg.gap_id = meta.gap_id ?? null
+          },
+          onToken(delta) {
+            if (myToken !== typeToken) return
+            msg.content += delta || ''
+            if (msg.content.length % 8 === 0) scrollToBottom()
+          },
+          onDone(done) {
+            if (myToken !== typeToken) return
+            conversationId.value = done.conversation_id
+            msg.content = done.reply || msg.content
+            msg.citations = done.citations || msg.citations || []
+            msg.confidence = done.confidence
+            msg.message_id = done.message_id
+            msg.gap_id = done.gap_id ?? null
+            msg.typing = false
+          },
+        },
+      )
+      if (myToken !== typeToken) return
+      msg.typing = false
+    }
     await refreshConversations()
   } catch (e) {
     error.value = e.detail || e.message || '发送失败'

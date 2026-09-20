@@ -126,30 +126,32 @@ export async function makeAdmin(id) {
 
 /**
  * POST /api/users/{id}/disable
- * 后端未就绪，固定走 mock，不请求真接口
  */
 export async function disableUser(id) {
-  const num = Number(id)
-  const me = getUsername()
-  const active = MOCK_ACTIVE_USERS.find((u) => u.id === num)
-  if (active && me && active.username === me) {
-    const err = new Error('不能禁用当前登录账号')
-    err.detail = '不能禁用当前登录账号'
-    throw err
+  if (USE_MOCK) {
+    const num = Number(id)
+    const me = getUsername()
+    const active = MOCK_ACTIVE_USERS.find((u) => u.id === num)
+    if (active && me && active.username === me) {
+      const err = new Error('不能禁用当前登录账号')
+      err.detail = '不能禁用当前登录账号'
+      throw err
+    }
+    if (MOCK_DISABLED_USER_IDS.has(num)) {
+      const err = new Error('该用户已禁用')
+      err.detail = '该用户已禁用'
+      throw err
+    }
+    MOCK_DISABLED_USER_IDS.add(num)
+    if (active) active.status = 'disabled'
+    const mu = Object.values(MOCK_USERS).find((u) => u.id === num)
+    if (mu) mu.status = 'disabled'
+    pushMockLog({
+      operator: me || 'admin',
+      action: '禁用用户',
+      detail: active?.username || mu?.username || `用户#${num}`,
+    })
+    return { ok: true, status: 'disabled' }
   }
-  if (MOCK_DISABLED_USER_IDS.has(num)) {
-    const err = new Error('该用户已禁用')
-    err.detail = '该用户已禁用'
-    throw err
-  }
-  MOCK_DISABLED_USER_IDS.add(num)
-  if (active) active.status = 'disabled'
-  const mu = Object.values(MOCK_USERS).find((u) => u.id === num)
-  if (mu) mu.status = 'disabled'
-  pushMockLog({
-    operator: me || 'admin',
-    action: '禁用用户',
-    detail: active?.username || mu?.username || `用户#${num}`,
-  })
-  return { ok: true, status: 'disabled' }
+  return request(`/api/users/${id}/disable`, { method: 'POST' })
 }
