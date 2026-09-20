@@ -136,6 +136,7 @@ async def upload_document(
     )
     chunk_count = db.query(Document).filter(Document.id == doc.id).first()
     log_action(db, user.id, user.username, "upload_document", resource=f"doc:{doc.id}", detail=file.filename)
+    db.commit()
     return {"id": doc.id, "title": doc.title, "chunks": chunk_count.version if chunk_count else 0}
 
 
