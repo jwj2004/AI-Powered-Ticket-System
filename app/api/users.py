@@ -128,6 +128,31 @@ def make_admin(
     return {"ok": True}
 
 
+class UpdateRoleRequest(BaseModel):
+    role: str
+
+
+@router.patch("/{user_id}")
+def update_user_role(
+    user_id: int,
+    req: UpdateRoleRequest,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_admin),
+):
+    if req.role not in ("admin", "ops", "newbie"):
+        raise HTTPException(status_code=400, detail="role 必须是 admin/ops/newbie")
+    if user_id == user.id:
+        raise HTTPException(status_code=400, detail="不能修改自己的角色")
+    target = db.query(User).filter(User.id == user_id).first()
+    if not target:
+        raise HTTPException(status_code=404, detail="用户不存在")
+    old_role = target.role
+    target.role = req.role
+    log_action(db, user.id, user.username, "update_role", resource=f"user:{user_id}", detail=f"{target.username}: {old_role} -> {req.role}")
+    db.commit()
+    return {"ok": True}
+
+
 @router.post("/{user_id}/disable")
 def disable_user(
     user_id: int,
