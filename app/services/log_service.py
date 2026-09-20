@@ -12,4 +12,4 @@ def log_action(db: Session, user_id: int, username: str, action: str, resource: 
         detail=detail,
     )
     db.add(entry)
-    db.commit()
+    db.flush()

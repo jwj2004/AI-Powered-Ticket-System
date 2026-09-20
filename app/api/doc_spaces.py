@@ -7,6 +7,7 @@ from app.core.database import get_db
 from app.core.deps import get_current_user, require_admin
 from app.models.user import User
 from app.models.doc_space import DocSpace
+from app.services.log_service import log_action
 
 router = APIRouter(prefix="/api/doc-spaces", tags=["文档空间"])
 
@@ -53,6 +54,7 @@ def create_space(
         raise HTTPException(status_code=400, detail="空间名已存在")
     space = DocSpace(name=req.name, description=req.description, role=req.role or "all")
     db.add(space)
+    log_action(db, user.id, user.username, "create_space", resource=f"space:{space.name}", detail=req.role or "all")
     db.commit()
     db.refresh(space)
     return {"id": space.id, "name": space.name, "ok": True}
@@ -74,6 +76,7 @@ def update_space(
         space.description = req.description
     if req.role is not None:
         space.role = req.role
+    log_action(db, user.id, user.username, "update_space", resource=f"space:{space_id}")
     db.commit()
     return {"ok": True}
 
@@ -88,5 +91,6 @@ def delete_space(
     if not space:
         raise HTTPException(status_code=404, detail="空间不存在")
     db.delete(space)
+    log_action(db, user.id, user.username, "delete_space", resource=f"space:{space_id}")
     db.commit()
     return {"ok": True}

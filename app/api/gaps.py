@@ -8,6 +8,7 @@ from app.core.deps import require_admin
 from app.models.user import User
 from app.models.knowledge_gap import KnowledgeGap
 from app.models.notification import Notification
+from app.services.log_service import log_action
 
 router = APIRouter(prefix="/api/gaps", tags=["知识缺口"])
 
@@ -63,6 +64,7 @@ def resolve_gap(
         read=False,
     )
     db.add(notification)
+    log_action(db, user.id, user.username, "resolve_gap", resource=f"gap:{gap_id}", detail=req.answer[:50])
     db.commit()
     return {"ok": True, "notified_user_id": gap.user_id}
 
@@ -89,5 +91,6 @@ def merge_gaps(
         target.answer = source.answer
         target.status = "resolved"
     db.delete(source)
+    log_action(db, user.id, user.username, "merge_gap", resource=f"gap:{gap_id}->gap:{req.target_gap_id}")
     db.commit()
     return {"ok": True, "merged_into": target.id}
