@@ -37,6 +37,7 @@ import { onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { login } from '../api/auth'
 import { loadPendingUserCount } from '../api/pendingBadge'
+import { markGuidePending } from '../utils/userLocal'
 
 const router = useRouter()
 const route = useRoute()
@@ -76,6 +77,7 @@ async function onSubmit() {
         /* 红点失败不挡住登录 */
       }
     }
+    if (data.role === 'newbie') markGuidePending(data.username)
     router.replace(resolveLanding(data.role))
   } catch (e) {
     const detail = e.detail || e.message || '登录失败'

@@ -28,11 +28,9 @@
             </button>
           </div>
         </div>
+        <button type="button" class="link" @click="openLookup">错误码直查</button>
         <button v-if="role === 'admin'" class="link" @click="$router.push('/admin/documents')">
           管理后台
-        </button>
-        <button v-if="role === 'newbie'" class="link" @click="$router.push('/faq')">
-          新手指南
         </button>
         <UserMenu />
         <button class="link" @click="onLogout">退出</button>
@@ -41,53 +39,158 @@
 
     <div class="body">
       <aside class="sidebar">
-        <div class="side-head">
-          <div class="side-title">历史会话</div>
-          <button type="button" class="new-chat" @click="onNewChat">新对话</button>
-        </div>
-        <input
-          v-model="convQuery"
-          class="conv-search"
-          type="search"
-          placeholder="搜索会话标题..."
-          aria-label="搜索会话"
-        />
-        <div v-if="convLoading" class="muted pad">加载中...</div>
-        <div
-          v-for="c in filteredConversations"
-          :key="c.conversation_id"
-          class="conv-item"
-          :class="{ active: conversationId === c.conversation_id }"
-          role="button"
-          tabindex="0"
-          @click="onSelectConversation(c.conversation_id)"
-          @keydown.enter.prevent="onSelectConversation(c.conversation_id)"
-        >
-          <div class="conv-main">
-            <div class="conv-title">{{ c.title }}</div>
-            <div class="conv-time">{{ formatTime(c.updated_at) }}</div>
-          </div>
+        <nav class="side-nav">
+          <button
+            v-if="isNewbie"
+            type="button"
+            class="side-link"
+            @click="openGuide"
+          >
+            新手指南
+          </button>
           <button
             type="button"
-            class="conv-del"
-            title="删除会话"
-            aria-label="删除会话"
-            @click.stop="onDeleteConversation(c)"
+            class="side-link"
+            :class="{ on: sidePanel === 'history' }"
+            @click="sidePanel = 'history'"
           >
-            🗑
+            历史会话
           </button>
-        </div>
-        <p v-if="!convLoading && !conversations.length" class="muted pad">暂无历史会话</p>
-        <p v-else-if="!convLoading && conversations.length && !filteredConversations.length" class="muted pad">
-          无匹配会话
-        </p>
+          <button
+            type="button"
+            class="side-link"
+            :class="{ on: sidePanel === 'fav' }"
+            @click="sidePanel = 'fav'"
+          >
+            我的收藏
+          </button>
+          <button
+            type="button"
+            class="side-link"
+            :class="{ on: sidePanel === 'docs' }"
+            @click="sidePanel = 'docs'"
+          >
+            最近文档
+          </button>
+          <button
+            type="button"
+            class="side-link"
+            :class="{ on: sidePanel === 'feedback' }"
+            @click="sidePanel = 'feedback'"
+          >
+            我的反馈
+          </button>
+          <button type="button" class="side-link new-chat" @click="onNewChat">新对话</button>
+        </nav>
+
+        <template v-if="sidePanel === 'history'">
+          <div class="side-head">
+            <div class="side-title">历史会话</div>
+          </div>
+          <input
+            v-model="convQuery"
+            class="conv-search"
+            type="search"
+            placeholder="搜索会话标题..."
+            aria-label="搜索会话"
+          />
+          <div v-if="convLoading" class="muted pad">加载中...</div>
+          <div
+            v-for="c in filteredConversations"
+            :key="c.conversation_id"
+            class="conv-item"
+            :class="{ active: conversationId === c.conversation_id }"
+            role="button"
+            tabindex="0"
+            @click="onSelectConversation(c.conversation_id)"
+            @keydown.enter.prevent="onSelectConversation(c.conversation_id)"
+          >
+            <div class="conv-main">
+              <div class="conv-title">{{ c.title }}</div>
+              <div class="conv-time">{{ formatTime(c.updated_at) }}</div>
+            </div>
+            <button
+              type="button"
+              class="conv-del"
+              title="删除会话"
+              aria-label="删除会话"
+              @click.stop="onDeleteConversation(c)"
+            >
+              🗑
+            </button>
+          </div>
+          <p v-if="!convLoading && !conversations.length" class="muted pad">暂无历史会话</p>
+          <p v-else-if="!convLoading && conversations.length && !filteredConversations.length" class="muted pad">
+            无匹配会话
+          </p>
+        </template>
+
+        <template v-else-if="sidePanel === 'fav'">
+          <div class="side-title block">我的收藏</div>
+          <p v-if="!favorites.length" class="muted pad">还没有收藏</p>
+          <button
+            v-for="f in favorites"
+            :key="f.message_id"
+            type="button"
+            class="side-card"
+            @click="onOpenSaved(f)"
+          >
+            <div class="conv-title">{{ f.question || '未命名问题' }}</div>
+            <div class="conv-time">{{ f.reply }}</div>
+          </button>
+        </template>
+
+        <template v-else-if="sidePanel === 'docs'">
+          <div class="side-title block">最近文档</div>
+          <p v-if="!recentDocs.length" class="muted pad">回答里引用过的文档会出现在这里</p>
+          <button
+            v-for="d in recentDocs"
+            :key="d.document_id"
+            type="button"
+            class="side-card"
+            @click="onPreviewDoc(d)"
+          >
+            <div class="conv-title">{{ d.title }}</div>
+            <div class="conv-time">点击预览</div>
+          </button>
+        </template>
+
+        <template v-else>
+          <div class="side-title block">我的反馈</div>
+          <p v-if="!myFeedback.length" class="muted pad">赞或踩之后会出现在这里</p>
+          <button
+            v-for="f in myFeedback"
+            :key="f.message_id"
+            type="button"
+            class="side-card"
+            @click="onOpenSaved(f)"
+          >
+            <div class="fb-line">
+              <span class="fb-tag" :class="f.useful ? 'up' : 'down'">{{ f.useful ? '赞' : '踩' }}</span>
+              <span v-if="feedbackUpdated(f)" class="updated-tag">已更新</span>
+            </div>
+            <div class="conv-title">{{ f.question || '未命名问题' }}</div>
+          </button>
+        </template>
       </aside>
 
       <main class="main">
         <div ref="listEl" class="messages">
           <div v-if="!messages.length && !loading" class="placeholder">
             <p>{{ emptyHint }}</p>
-            <p v-if="emptyHint !== '开始新对话'" class="muted">试试「订单导出超时」或「支付回调」；输入「没有答案」可看低置信度样式</p>
+            <div v-if="hotQuestions.length" class="hot">
+              <div class="hot-title">大家都在问</div>
+              <button
+                v-for="q in hotQuestions"
+                :key="q"
+                type="button"
+                class="hot-chip"
+                @click="askQuestion(q)"
+              >
+                {{ q }}
+              </button>
+            </div>
+            <p v-else-if="emptyHint !== '开始新对话'" class="muted">试试「订单导出超时」或「支付回调」；输入「没有答案」可看低置信度样式</p>
           </div>
 
           <div
@@ -155,6 +258,14 @@
                   >
                     踩
                   </button>
+                  <button
+                    type="button"
+                    class="fb-btn"
+                    :class="{ active: isFavorited(m) }"
+                    @click="onToggleFavorite(m)"
+                  >
+                    {{ isFavorited(m) ? '已收藏' : '收藏' }}
+                  </button>
                   <span v-if="m.feedback !== null" class="fb-done">已反馈</span>
                 </template>
               </div>
@@ -189,6 +300,17 @@
               ↑
             </button>
           </div>
+          <div class="templates">
+            <button
+              v-for="t in questionTemplates"
+              :key="t"
+              type="button"
+              class="tpl"
+              @click="applyTemplate(t)"
+            >
+              {{ t }}
+            </button>
+          </div>
         </div>
       </main>
     </div>
@@ -205,6 +327,73 @@
         <button type="button" class="btn modal-close" @click="citationDetail = null">关闭</button>
       </div>
     </div>
+
+    <div v-if="showGuide" class="modal-mask" @click.self="closeGuide">
+      <div class="modal guide-modal">
+        <div class="modal-title">欢迎使用知答，先看看这几个常见问题</div>
+        <div v-if="isNewbie" class="progress">
+          <div class="progress-label">已读 {{ readCount }} / 共 {{ faqItems.length }} 条</div>
+          <div class="progress-track">
+            <div class="progress-bar" :style="{ width: progressPct + '%' }"></div>
+          </div>
+        </div>
+        <p v-if="!faqItems.length" class="muted">暂无常见问题</p>
+        <div v-else class="guide-list">
+          <div v-for="f in faqItems" :key="f.id" class="guide-row">
+            <button type="button" class="guide-q" @click="onGuideAsk(f)">{{ f.question }}</button>
+            <span v-if="isNewbie" class="read-tag" :class="{ read: isFaqRead(f.id) }">
+              {{ isFaqRead(f.id) ? '已读' : '未读' }}
+            </span>
+            <button type="button" class="link-mini" @click="onGuideDetail(f)">详情</button>
+          </div>
+        </div>
+        <div v-if="guideDetail" class="guide-detail">
+          <div class="conv-title">{{ guideDetail.question }}</div>
+          <div class="modal-body">{{ guideDetail.answer }}</div>
+          <button type="button" class="link-mini" @click="onGuideAsk(guideDetail)">用这个问题提问</button>
+        </div>
+        <label class="suppress">
+          <input type="checkbox" :checked="!guideAuto" @change="onSuppressChange" />
+          不再自动弹出
+        </label>
+        <button type="button" class="btn modal-close" @click="closeGuide">开始使用</button>
+      </div>
+    </div>
+
+    <div v-if="lookupOpen" class="modal-mask" @click.self="lookupOpen = false">
+      <div class="modal">
+        <div class="modal-title">错误码直查</div>
+        <div class="lookup-row">
+          <input
+            v-model="lookupCode"
+            class="lookup-input"
+            placeholder="例如 PAY_CALLBACK_TIMEOUT"
+            @keyup.enter="onLookup"
+          />
+          <button type="button" class="btn" :disabled="lookupLoading || !lookupCode.trim()" @click="onLookup">
+            {{ lookupLoading ? '查询中...' : '查询' }}
+          </button>
+        </div>
+        <p v-if="lookupError" class="error">{{ lookupError }}</p>
+        <div v-if="lookupResult" class="lookup-result">
+          <template v-if="lookupResult.name">
+            <div class="lookup-name">{{ lookupResult.code }} · {{ lookupResult.name }}</div>
+            <div class="modal-body">{{ lookupResult.solution || '暂无解决方案' }}</div>
+          </template>
+          <p v-else class="muted">没有找到这个错误码</p>
+        </div>
+        <button type="button" class="btn modal-close" @click="lookupOpen = false">关闭</button>
+      </div>
+    </div>
+
+    <div v-if="docPreview" class="modal-mask" @click.self="docPreview = null">
+      <div class="modal">
+        <div class="modal-title">{{ docPreview.title }}</div>
+        <p v-if="docPreview.error" class="error">{{ docPreview.error }}</p>
+        <div v-else class="modal-body doc-html" v-html="docPreview.html"></div>
+        <button type="button" class="btn modal-close" @click="docPreview = null">关闭</button>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -215,12 +404,36 @@ import { getUsername, getRole, clearAuth } from '../api/authStorage'
 import { chat, chatStream, sendFeedback, getCitationChunk, listConversations, listMessages, deleteConversation } from '../api/chat'
 import { USE_MOCK } from '../api/http'
 import { listNotifications, markNotificationRead } from '../api/notifications'
+import { listFaq } from '../api/faq'
+import { lookupErrorCode } from '../api/lookup'
+import { getDocument } from '../api/documents'
+import { renderDocContent } from '../utils/renderContent'
 import { typewrite } from '../utils/typewriter'
 import UserMenu from '../components/UserMenu.vue'
+import {
+  consumeGuidePending,
+  guideAutoEnabled,
+  setGuideAuto,
+  loadReadFaq,
+  markFaqRead,
+  loadFavorites,
+  saveFavorites,
+  loadRecentDocs,
+  saveRecentDocs,
+  loadMyFeedback,
+  saveMyFeedback,
+} from '../utils/userLocal'
 
 const router = useRouter()
 const username = getUsername() || ''
 const role = getRole() || ''
+const isNewbie = role === 'newbie'
+
+const questionTemplates = [
+  '客户说付了钱订单没更新',
+  '客户反映系统卡顿',
+  '客户要退款',
+]
 
 const input = ref('')
 const loading = ref(false)
@@ -239,6 +452,23 @@ const notifications = ref([])
 const notifUnread = ref(0)
 const showNotif = ref(false)
 
+const sidePanel = ref('history')
+const faqItems = ref([])
+const readIds = ref(loadReadFaq(username))
+const favorites = ref(loadFavorites(username))
+const recentDocs = ref(loadRecentDocs(username))
+const myFeedback = ref(loadMyFeedback(username))
+const showGuide = ref(false)
+const guideAuto = ref(guideAutoEnabled(username))
+const guideDetail = ref(null)
+
+const lookupOpen = ref(false)
+const lookupCode = ref('')
+const lookupLoading = ref(false)
+const lookupResult = ref(null)
+const lookupError = ref('')
+const docPreview = ref(null)
+
 /** 切换会话时递增，打断进行中的打字机 */
 let typeToken = 0
 
@@ -248,6 +478,28 @@ const filteredConversations = computed(() => {
   const q = convQuery.value.trim().toLowerCase()
   if (!q) return conversations.value
   return conversations.value.filter((c) => String(c.title || '').toLowerCase().includes(q))
+})
+
+const hotQuestions = computed(() => {
+  const seen = new Set()
+  const out = []
+  for (const f of faqItems.value) {
+    const q = String(f.question || '').trim()
+    if (!q || seen.has(q)) continue
+    seen.add(q)
+    out.push(q)
+    if (out.length >= 10) break
+  }
+  return out
+})
+
+const readCount = computed(
+  () => faqItems.value.filter((f) => readIds.value.includes(Number(f.id))).length,
+)
+
+const progressPct = computed(() => {
+  if (!faqItems.value.length) return 0
+  return Math.round((readCount.value / faqItems.value.length) * 100)
 })
 
 function formatTime(iso) {
@@ -281,8 +533,18 @@ async function refreshNotifications() {
   }
 }
 
+async function loadFaqList() {
+  try {
+    const data = await listFaq()
+    faqItems.value = Array.isArray(data) ? data : []
+  } catch {
+    faqItems.value = []
+  }
+}
+
 onMounted(async () => {
-  await Promise.all([refreshConversations(), refreshNotifications()])
+  await Promise.all([refreshConversations(), refreshNotifications(), loadFaqList()])
+  if (isNewbie && consumeGuidePending(username)) showGuide.value = true
 })
 
 async function scrollToBottom() {
@@ -305,6 +567,7 @@ function cancelTypewriter() {
 
 function onNewChat() {
   cancelTypewriter()
+  sidePanel.value = 'history'
   conversationId.value = null
   messages.value = []
   emptyHint.value = '开始提问吧'
@@ -352,6 +615,7 @@ async function onSelectConversation(id) {
       typing: false,
       copied: false,
     }))
+    rememberCitations(messages.value.flatMap((m) => m.citations || []))
   } catch (e) {
     error.value = e.detail || e.message || '加载消息失败'
   } finally {
@@ -412,6 +676,7 @@ async function onSend() {
       if (myToken !== typeToken) return
       msg.content = reply
       msg.typing = false
+      rememberCitations(msg.citations || [])
     } else {
       messages.value.push({
         role: 'assistant',
@@ -452,6 +717,7 @@ async function onSend() {
             msg.message_id = done.message_id
             msg.gap_id = done.gap_id ?? null
             msg.typing = false
+            rememberCitations(msg.citations || [])
           },
         },
       )
@@ -486,8 +752,170 @@ async function onFeedback(m, useful) {
   try {
     await sendFeedback({ message_id: m.message_id, useful })
     m.feedback = useful
+    const question = questionBefore(m)
+    const list = loadMyFeedback(username).filter((x) => x.message_id !== m.message_id)
+    list.unshift({
+      message_id: m.message_id,
+      conversation_id: conversationId.value,
+      question,
+      useful,
+      created_at: new Date().toISOString(),
+    })
+    saveMyFeedback(username, list)
+    myFeedback.value = list
   } catch (e) {
     error.value = e.detail || e.message || '反馈失败'
+  }
+}
+
+function questionBefore(m) {
+  const i = messages.value.indexOf(m)
+  for (let j = i - 1; j >= 0; j -= 1) {
+    if (messages.value[j].role === 'user') return messages.value[j].content || ''
+  }
+  return ''
+}
+
+function rememberCitations(citations) {
+  if (!citations?.length) return
+  let list = loadRecentDocs(username)
+  for (const c of citations) {
+    if (c?.document_id == null) continue
+    list = list.filter((d) => d.document_id !== c.document_id)
+    list.unshift({
+      document_id: c.document_id,
+      title: c.title || `文档 #${c.document_id}`,
+      chunk_index: c.chunk_index ?? null,
+    })
+  }
+  saveRecentDocs(username, list)
+  recentDocs.value = loadRecentDocs(username)
+}
+
+function isFavorited(m) {
+  return favorites.value.some((f) => f.message_id === m.message_id)
+}
+
+function onToggleFavorite(m) {
+  if (!m.message_id) return
+  const list = loadFavorites(username)
+  const idx = list.findIndex((f) => f.message_id === m.message_id)
+  if (idx >= 0) {
+    list.splice(idx, 1)
+  } else {
+    list.unshift({
+      message_id: m.message_id,
+      conversation_id: conversationId.value,
+      question: questionBefore(m),
+      reply: String(m.content || '').slice(0, 160),
+      created_at: new Date().toISOString(),
+    })
+  }
+  saveFavorites(username, list)
+  favorites.value = list
+}
+
+function onOpenSaved(item) {
+  sidePanel.value = 'history'
+  if (item?.conversation_id != null) onSelectConversation(item.conversation_id)
+}
+
+function normText(s) {
+  return String(s || '').replace(/\s+/g, '').trim()
+}
+
+function feedbackUpdated(item) {
+  if (!item || item.useful !== false) return false
+  const q = normText(item.question)
+  if (!q) return false
+  return notifications.value.some(
+    (n) => normText(n.question) === q && String(n.answer || '').trim(),
+  )
+}
+
+function applyTemplate(text) {
+  input.value = text
+}
+
+function askQuestion(text) {
+  const q = String(text || '').trim()
+  if (!q || loading.value) return
+  input.value = q
+  onSend()
+}
+
+function isFaqRead(id) {
+  return readIds.value.includes(Number(id))
+}
+
+function touchFaqRead(id) {
+  readIds.value = markFaqRead(username, id)
+}
+
+function openGuide() {
+  guideDetail.value = null
+  guideAuto.value = guideAutoEnabled(username)
+  showGuide.value = true
+}
+
+function closeGuide() {
+  showGuide.value = false
+  guideDetail.value = null
+}
+
+function onSuppressChange(e) {
+  const suppress = Boolean(e.target.checked)
+  guideAuto.value = !suppress
+  setGuideAuto(username, !suppress)
+}
+
+function onGuideDetail(item) {
+  touchFaqRead(item.id)
+  guideDetail.value = item
+}
+
+function onGuideAsk(item) {
+  touchFaqRead(item.id)
+  closeGuide()
+  askQuestion(item.question)
+}
+
+function openLookup() {
+  lookupOpen.value = true
+  lookupError.value = ''
+  lookupResult.value = null
+}
+
+async function onLookup() {
+  const code = lookupCode.value.trim()
+  if (!code || lookupLoading.value) return
+  lookupLoading.value = true
+  lookupError.value = ''
+  lookupResult.value = null
+  try {
+    lookupResult.value = await lookupErrorCode(code)
+  } catch (e) {
+    lookupError.value = e.detail || e.message || '查询失败'
+  } finally {
+    lookupLoading.value = false
+  }
+}
+
+async function onPreviewDoc(d) {
+  docPreview.value = { title: d.title, html: '<p>加载中...</p>', error: '' }
+  try {
+    const detail = await getDocument(d.document_id)
+    docPreview.value = {
+      title: detail.title || d.title,
+      html: renderDocContent(detail.content || ''),
+      error: '',
+    }
+  } catch (e) {
+    docPreview.value = {
+      title: d.title,
+      html: '',
+      error: e.detail || e.message || '预览失败',
+    }
   }
 }
 
@@ -941,5 +1369,156 @@ h1 { margin: 0; font-size: 18px; color: var(--color-text); }
   line-height: 1.7;
   margin-bottom: 16px;
 }
+.side-nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 12px;
+}
+.side-link {
+  border: 1px solid var(--color-border);
+  background: #fff;
+  color: #374151;
+  border-radius: var(--radius-sm);
+  padding: 4px 8px;
+  font-size: 12px;
+  cursor: pointer;
+}
+.side-link.on,
+.side-link:hover {
+  border-color: var(--color-primary-muted);
+  color: var(--color-primary);
+  background: var(--color-primary-soft);
+}
+.side-title.block { margin-bottom: 8px; }
+.side-card {
+  display: block;
+  width: 100%;
+  text-align: left;
+  border: 1px solid var(--color-border);
+  background: #fff;
+  border-radius: var(--radius-sm);
+  padding: 8px 10px;
+  margin-bottom: 6px;
+  cursor: pointer;
+}
+.side-card:hover { border-color: var(--color-primary-muted); }
+.fb-line { display: flex; gap: 6px; align-items: center; margin-bottom: 4px; }
+.fb-tag {
+  font-size: 11px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: #ecfdf5;
+  color: #047857;
+}
+.fb-tag.down { background: #fef2f2; color: #b91c1c; }
+.updated-tag {
+  font-size: 11px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: #eff6ff;
+  color: var(--color-primary);
+}
+.hot { margin-top: 14px; }
+.hot-title { font-weight: 600; font-size: 13px; margin-bottom: 8px; color: #374151; }
+.hot-chip {
+  display: block;
+  width: 100%;
+  text-align: left;
+  margin: 0 0 6px;
+  border: 1px solid var(--color-border);
+  background: #fff;
+  border-radius: var(--radius-sm);
+  padding: 8px 10px;
+  cursor: pointer;
+  color: #1f2937;
+}
+.hot-chip:hover { border-color: var(--color-primary-muted); color: var(--color-primary); }
+.templates {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+.tpl {
+  border: 1px solid var(--color-border);
+  background: #fff;
+  border-radius: 999px;
+  padding: 4px 10px;
+  font-size: 12px;
+  color: #374151;
+  cursor: pointer;
+}
+.tpl:hover { border-color: var(--color-primary-muted); color: var(--color-primary); }
+.guide-modal { max-width: 560px; max-height: 80vh; overflow: auto; }
+.progress { margin: 10px 0 12px; }
+.progress-label { font-size: 12px; color: #4b5563; margin-bottom: 6px; }
+.progress-track {
+  height: 8px;
+  background: #e5e7eb;
+  border-radius: 999px;
+  overflow: hidden;
+}
+.progress-bar {
+  height: 100%;
+  background: var(--color-primary);
+}
+.guide-list { margin-bottom: 12px; }
+.guide-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 0;
+  border-bottom: 1px solid #f3f4f6;
+}
+.guide-q {
+  flex: 1;
+  text-align: left;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  color: #111827;
+  padding: 0;
+}
+.guide-q:hover { color: var(--color-primary); }
+.read-tag {
+  flex-shrink: 0;
+  font-size: 11px;
+  color: #9ca3af;
+}
+.read-tag.read { color: #047857; }
+.link-mini {
+  flex-shrink: 0;
+  border: none;
+  background: transparent;
+  color: var(--color-primary);
+  cursor: pointer;
+  font-size: 12px;
+  padding: 0;
+}
+.guide-detail {
+  background: #f8fafc;
+  border-radius: var(--radius-sm);
+  padding: 10px 12px;
+  margin-bottom: 12px;
+}
+.suppress {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: #4b5563;
+  margin-bottom: 12px;
+}
+.lookup-row { display: flex; gap: 8px; margin: 12px 0; }
+.lookup-input {
+  flex: 1;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  padding: 8px 10px;
+}
+.lookup-name { font-weight: 600; margin-bottom: 6px; }
+.doc-html { white-space: normal; }
+.doc-html :deep(p) { margin: 0 0 8px; }
 .modal-close { width: 100%; }
 </style>
