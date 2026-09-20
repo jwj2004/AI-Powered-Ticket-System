@@ -36,6 +36,7 @@
 import { onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { login } from '../api/auth'
+import { loadPendingUserCount } from '../api/pendingBadge'
 
 const router = useRouter()
 const route = useRoute()
@@ -68,6 +69,13 @@ async function onSubmit() {
   loading.value = true
   try {
     const data = await login(username.value.trim(), password.value)
+    if (data.role === 'admin') {
+      try {
+        await loadPendingUserCount()
+      } catch {
+        /* 红点失败不挡住登录 */
+      }
+    }
     router.replace(resolveLanding(data.role))
   } catch (e) {
     const detail = e.detail || e.message || '登录失败'

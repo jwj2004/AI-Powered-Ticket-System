@@ -133,6 +133,7 @@
 <script setup>
 import { onMounted, ref } from 'vue'
 import { getUsername } from '../../api/authStorage'
+import { clearPendingUserCount } from '../../api/pendingBadge'
 import {
   listPendingUsers,
   listActiveUsers,
@@ -251,7 +252,10 @@ async function onDisable(u) {
   }
 }
 
-onMounted(refresh)
+onMounted(() => {
+  clearPendingUserCount()
+  refresh()
+})
 </script>
 
 <style scoped>

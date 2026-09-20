@@ -5,7 +5,7 @@
 import { getToken, clearAuth } from './authStorage'
 import { emitNetworkError } from './networkError'
 
-export const API_BASE = 'http://127.0.0.1:8000'
+export const API_BASE = 'http://192.168.10.57:8000'
 
 /** false = 真后端；true = 前端 mock */
 export const USE_MOCK = false
