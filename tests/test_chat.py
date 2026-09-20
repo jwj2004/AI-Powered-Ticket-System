@@ -56,3 +56,27 @@ class TestFeedback:
             headers=admin_headers,
         )
         assert r.status_code == 200
+
+
+class TestDeleteConversation:
+    def test_delete_own_conversation(self, client, admin_headers):
+        chat_r = client.post("/api/chat", json={"message": "测试删除会话", "conversation_id": None}, headers=admin_headers)
+        conv_id = chat_r.json()["conversation_id"]
+
+        r = client.delete(f"/api/conversations/{conv_id}", headers=admin_headers)
+        assert r.status_code == 200
+        assert r.json()["ok"] is True
+
+        list_r = client.get("/api/conversations", headers=admin_headers)
+        assert all(c["conversation_id"] != conv_id for c in list_r.json())
+
+    def test_delete_nonexistent(self, client, admin_headers):
+        r = client.delete("/api/conversations/999", headers=admin_headers)
+        assert r.status_code == 404
+
+    def test_delete_others_conversation(self, client, admin_headers, newbie_headers):
+        chat_r = client.post("/api/chat", json={"message": "admin的会话", "conversation_id": None}, headers=admin_headers)
+        conv_id = chat_r.json()["conversation_id"]
+
+        r = client.delete(f"/api/conversations/{conv_id}", headers=newbie_headers)
+        assert r.status_code == 404
