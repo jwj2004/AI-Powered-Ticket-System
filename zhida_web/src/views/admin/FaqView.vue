@@ -19,25 +19,33 @@
 
       <div v-if="!faq.length" class="empty">暂无 FAQ</div>
       <div v-for="f in faq" :key="f.id" class="card">
-        <div class="q">{{ f.question }}</div>
+        <div class="card-head">
+          <div class="q">{{ f.question }}</div>
+          <div v-if="isAdmin" class="card-ops">
+            <button type="button" class="link-btn" @click="openEdit(f)">编辑</button>
+            <button type="button" class="link-btn danger" @click="onDelete(f)">删除</button>
+          </div>
+        </div>
         <div class="a">{{ f.answer }}</div>
         <div v-if="f.gap_id != null" class="meta">关联 gap_id: {{ f.gap_id }}</div>
       </div>
 
       <div v-if="showModal" class="modal-mask" @click.self="showModal = false">
         <div class="modal">
-          <h3>新建 FAQ</h3>
+          <h3>{{ editingId == null ? '新建 FAQ' : '编辑 FAQ' }}</h3>
           <label class="label">问题</label>
           <input v-model="form.question" class="input" placeholder="例如：订单导出超时怎么办？" />
           <label class="label">答案</label>
           <textarea v-model="form.answer" class="textarea" rows="5" placeholder="填写标准答复..."></textarea>
-          <label class="label">关联 gap_id（可选）</label>
-          <input v-model="form.gap_id" class="input" placeholder="如 5" />
+          <template v-if="editingId == null">
+            <label class="label">关联 gap_id（可选）</label>
+            <input v-model="form.gap_id" class="input" placeholder="如 5" />
+          </template>
           <p v-if="modalError" class="error">{{ modalError }}</p>
           <div class="modal-actions">
             <button type="button" class="link-btn" @click="showModal = false">取消</button>
-            <button type="button" class="btn" :disabled="saving" @click="submitCreate">
-              {{ saving ? '发布中...' : '发布' }}
+            <button type="button" class="btn" :disabled="saving" @click="submitSave">
+              {{ saving ? '保存中...' : (editingId == null ? '发布' : '保存') }}
             </button>
           </div>
         </div>
@@ -50,7 +58,7 @@
 import { computed, onMounted, reactive, ref } from 'vue'
 import { useRoute } from 'vue-router'
 import { getRole } from '../../api/authStorage'
-import { listFaq, publishFaq } from '../../api/faq'
+import { listFaq, publishFaq, updateFaq, deleteFaq } from '../../api/faq'
 
 const route = useRoute()
 const role = getRole() || ''
@@ -64,6 +72,7 @@ const okMsg = ref('')
 const showModal = ref(false)
 const saving = ref(false)
 const modalError = ref('')
+const editingId = ref(null)
 const form = reactive({
   question: '',
   answer: '',
@@ -81,6 +90,7 @@ async function refresh() {
 onMounted(refresh)
 
 function openCreate() {
+  editingId.value = null
   form.question = ''
   form.answer = ''
   form.gap_id = ''
@@ -88,7 +98,16 @@ function openCreate() {
   showModal.value = true
 }
 
-async function submitCreate() {
+function openEdit(item) {
+  editingId.value = item.id
+  form.question = item.question || ''
+  form.answer = item.answer || ''
+  form.gap_id = ''
+  modalError.value = ''
+  showModal.value = true
+}
+
+async function submitSave() {
   modalError.value = ''
   if (!form.question.trim() || !form.answer.trim()) {
     modalError.value = '问题和答案都不能为空'
@@ -96,18 +115,39 @@ async function submitCreate() {
   }
   saving.value = true
   try {
-    await publishFaq({
-      question: form.question.trim(),
-      answer: form.answer.trim(),
-      gap_id: form.gap_id === '' ? null : Number(form.gap_id),
-    })
+    if (editingId.value == null) {
+      await publishFaq({
+        question: form.question.trim(),
+        answer: form.answer.trim(),
+        gap_id: form.gap_id === '' ? null : Number(form.gap_id),
+      })
+      okMsg.value = '已发布'
+    } else {
+      await updateFaq(editingId.value, {
+        question: form.question.trim(),
+        answer: form.answer.trim(),
+      })
+      okMsg.value = '已更新'
+    }
     showModal.value = false
-    okMsg.value = '已发布'
     await refresh()
   } catch (e) {
-    modalError.value = e.detail || e.message || '发布失败'
+    modalError.value = e.detail || e.message || '保存失败'
   } finally {
     saving.value = false
+  }
+}
+
+async function onDelete(item) {
+  if (!confirm(`确认删除「${item.question}」？`)) return
+  error.value = ''
+  okMsg.value = ''
+  try {
+    await deleteFaq(item.id)
+    faq.value = faq.value.filter((f) => f.id !== item.id)
+    okMsg.value = '已删除'
+  } catch (e) {
+    error.value = e.detail || e.message || '删除失败'
   }
 }
 </script>
@@ -172,6 +212,18 @@ h2 { margin: 0 0 4px; font-size: 18px; }
   box-shadow: 0 1px 2px rgba(15, 23, 42, 0.03);
 }
 .q { font-weight: 600; margin-bottom: 6px; }
+.card-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+}
+.card-ops {
+  display: flex;
+  gap: 8px;
+  flex-shrink: 0;
+}
+.link-btn.danger { color: var(--color-danger); }
 .a { color: #444; white-space: pre-wrap; }
 .meta { margin-top: 8px; font-size: 12px; color: #888; }
 .error { color: var(--color-danger); }
