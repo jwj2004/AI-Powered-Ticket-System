@@ -15,7 +15,7 @@
 
 - Python 3.10 + FastAPI + LangGraph
 - LLM：DeepSeek（OpenAI 兼容）；无 Key 时模板拼接
-- 会话/缺口/通知/热门缓存：B 本地 SQLite（`DATABASE_PATH`）
+- 会话读写 A 的 `db/zhida.db`（`DATABASE_URL=sqlite:///./db/zhida.db`）。不要再用 `zhida_b.db`
 - 向量检索在 A；B 侧做查询改写、BM25+向量 RRF、cross-encoder 重排
 - `POST /api/chat` 默认 SSE（meta / token / done）；`Accept: application/json` 或 `stream=false` 时同步 JSON
 - 除 `/api/auth/login` 与 `/api/health` 外需要 `Authorization: Bearer <token>`
