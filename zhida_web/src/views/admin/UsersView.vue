@@ -25,6 +25,22 @@
       >
         已通过
       </button>
+      <button
+        type="button"
+        class="tab"
+        :class="{ active: tab === 'rejected' }"
+        @click="switchTab('rejected')"
+      >
+        已拒绝
+      </button>
+      <button
+        type="button"
+        class="tab"
+        :class="{ active: tab === 'disabled' }"
+        @click="switchTab('disabled')"
+      >
+        已禁用
+      </button>
     </div>
 
     <p v-if="error" class="error">{{ error }}</p>
@@ -76,7 +92,7 @@
     </div>
 
     <!-- 已通过 -->
-    <div v-else class="table-wrap">
+    <div v-else-if="tab === 'active'" class="table-wrap">
       <table>
         <thead>
           <tr>
@@ -138,6 +154,80 @@
         </tbody>
       </table>
     </div>
+
+    <!-- 已拒绝 -->
+    <div v-else-if="tab === 'rejected'" class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>用户名</th>
+            <th>申请角色</th>
+            <th>申请时间</th>
+            <th>操作</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr v-if="loading">
+            <td colspan="4" class="empty">加载中...</td>
+          </tr>
+          <tr v-else-if="!rejected.length">
+            <td colspan="4" class="empty">暂无已拒绝用户</td>
+          </tr>
+          <tr v-for="u in rejected" :key="u.id">
+            <td>{{ u.username }}</td>
+            <td>{{ u.role }}</td>
+            <td>{{ formatTime(u.created_at) }}</td>
+            <td class="ops">
+              <button
+                type="button"
+                class="action-btn"
+                :disabled="busyId === u.id"
+                @click="onEnable(u, '重新同意')"
+              >
+                重新同意
+              </button>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- 已禁用 -->
+    <div v-else class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>用户名</th>
+            <th>角色</th>
+            <th>状态</th>
+            <th>操作</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr v-if="loading">
+            <td colspan="4" class="empty">加载中...</td>
+          </tr>
+          <tr v-else-if="!disabled.length">
+            <td colspan="4" class="empty">暂无已禁用用户</td>
+          </tr>
+          <tr v-for="u in disabled" :key="u.id">
+            <td>{{ u.username }}</td>
+            <td>{{ u.role }}</td>
+            <td><span class="status disabled">已禁用</span></td>
+            <td class="ops">
+              <button
+                type="button"
+                class="action-btn"
+                :disabled="busyId === u.id"
+                @click="onEnable(u, '启用')"
+              >
+                启用
+              </button>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
   </div>
 </template>
 
@@ -148,10 +238,13 @@ import { clearPendingUserCount } from '../../api/pendingBadge'
 import {
   listPendingUsers,
   listActiveUsers,
+  listRejectedUsers,
+  listDisabledUsers,
   approveUser,
   rejectUser,
   makeAdmin,
   disableUser,
+  enableUser,
   updateRole,
 } from '../../api/users'
 
@@ -159,6 +252,8 @@ const me = getUsername() || ''
 const tab = ref('pending')
 const pending = ref([])
 const active = ref([])
+const rejected = ref([])
+const disabled = ref([])
 const loading = ref(false)
 const error = ref('')
 const okMsg = ref('')
@@ -177,12 +272,22 @@ async function loadActive() {
   active.value = await listActiveUsers()
 }
 
+async function loadRejected() {
+  rejected.value = await listRejectedUsers()
+}
+
+async function loadDisabled() {
+  disabled.value = await listDisabledUsers()
+}
+
 async function refresh() {
   loading.value = true
   error.value = ''
   try {
     if (tab.value === 'pending') await loadPending()
-    else await loadActive()
+    else if (tab.value === 'active') await loadActive()
+    else if (tab.value === 'rejected') await loadRejected()
+    else await loadDisabled()
   } catch (e) {
     error.value = e.detail || e.message || '加载失败'
   } finally {
@@ -281,6 +386,23 @@ async function onDisable(u) {
     await disableUser(u.id)
     okMsg.value = `已禁用 ${u.username}`
     await loadActive()
+  } catch (e) {
+    error.value = e.detail || e.message || '操作失败'
+  } finally {
+    busyId.value = null
+  }
+}
+
+async function onEnable(u, actionLabel) {
+  busyId.value = u.id
+  error.value = ''
+  okMsg.value = ''
+  try {
+    await enableUser(u.id)
+    okMsg.value = actionLabel === '启用'
+      ? `已启用 ${u.username}`
+      : `已重新同意 ${u.username}`
+    await refresh()
   } catch (e) {
     error.value = e.detail || e.message || '操作失败'
   } finally {

@@ -28,12 +28,20 @@ export let MOCK_PENDING_USERS = [
   },
 ]
 
-/** 已通过用户（可变；不含 pending/rejected） */
+/** 已通过用户（可变；不含 pending/rejected/disabled） */
 export let MOCK_ACTIVE_USERS = [
   { id: 1, username: 'admin', role: 'admin', status: 'active', created_at: '2026-09-01T08:00:00' },
   { id: 2, username: 'zhangsan', role: 'ops', status: 'active', created_at: '2026-09-10T08:00:00' },
   { id: 3, username: 'lisi', role: 'newbie', status: 'active', created_at: '2026-09-12T08:00:00' },
 ]
+
+/** 已拒绝的注册申请 */
+export let MOCK_REJECTED_USERS = [
+  { id: 11, username: 'zhaoliu', role: 'newbie', status: 'rejected', created_at: '2026-09-16T08:00:00' },
+]
+
+/** 已禁用用户 */
+export let MOCK_DISABLED_USERS = []
 
 let _nextUserId = 100
 

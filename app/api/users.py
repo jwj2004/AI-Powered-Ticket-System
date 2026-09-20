@@ -1,6 +1,7 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
+from typing import Optional
 
 from app.core.database import get_db
 from app.core.deps import require_admin
@@ -19,15 +20,16 @@ class CreateUserRequest(BaseModel):
 
 @router.get("")
 def list_users(
+    status: Optional[str] = Query(None, description="按状态过滤：pending/active/rejected/disabled"),
     db: Session = Depends(get_db),
     user: User = Depends(require_admin),
 ):
-    users = (
-        db.query(User)
-        .filter(User.status == "active")
-        .order_by(User.created_at.desc())
-        .all()
-    )
+    q = db.query(User)
+    if status:
+        if status not in ("pending", "active", "rejected", "disabled"):
+            raise HTTPException(status_code=400, detail="status 必须是 pending/active/rejected/disabled")
+        q = q.filter(User.status == status)
+    users = q.order_by(User.created_at.desc()).all()
     return [
         {
             "id": u.id,
@@ -111,6 +113,24 @@ def reject_user(
     return {"ok": True}
 
 
+@router.post("/{user_id}/enable")
+def enable_user(
+    user_id: int,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_admin),
+):
+    target = db.query(User).filter(User.id == user_id).first()
+    if not target:
+        raise HTTPException(status_code=404, detail="用户不存在")
+    if target.status not in ("rejected", "disabled"):
+        raise HTTPException(status_code=400, detail=f"用户状态为 {target.status}，无法启用")
+    old_status = target.status
+    target.status = "active"
+    log_action(db, user.id, user.username, "enable_user", resource=f"user:{user_id}", detail=f"{target.username}: {old_status} -> active")
+    db.commit()
+    return {"ok": True}
+
+
 @router.post("/{user_id}/make-admin")
 def make_admin(
     user_id: int,
@@ -164,9 +184,11 @@ def disable_user(
     target = db.query(User).filter(User.id == user_id).first()
     if not target:
         raise HTTPException(status_code=404, detail="用户不存在")
-    if target.status == "rejected":
+    if target.status == "disabled":
         raise HTTPException(status_code=400, detail="用户已被禁用")
-    target.status = "rejected"
+    if target.status == "pending":
+        raise HTTPException(status_code=400, detail="待审核用户请使用拒绝接口")
+    target.status = "disabled"
     log_action(db, user.id, user.username, "disable_user", resource=f"user:{user_id}", detail=target.username)
     db.commit()
     return {"ok": True}
