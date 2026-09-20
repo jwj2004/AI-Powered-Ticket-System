@@ -32,6 +32,7 @@
             <td>{{ d.submitter }}</td>
             <td>{{ formatTime(d.submitted_at) }}</td>
             <td class="ops">
+              <button type="button" class="action-btn" @click="openPreview(d)">预览</button>
               <button type="button" class="action-btn" :disabled="busyId === d.id" @click="onApprove(d)">
                 通过
               </button>
@@ -43,18 +44,55 @@
         </tbody>
       </table>
     </div>
+
+    <div v-if="showPreview" class="modal-mask" @click.self="showPreview = false">
+      <div class="modal wide">
+        <h3>{{ previewTitle || '文档预览' }}</h3>
+        <p v-if="previewLoading" class="muted">加载中...</p>
+        <p v-else-if="previewError" class="error">{{ previewError }}</p>
+        <div v-else class="doc-body" v-html="previewHtml"></div>
+        <div class="modal-actions">
+          <button type="button" class="link-btn" @click="showPreview = false">关闭</button>
+          <button
+            type="button"
+            class="action-btn"
+            :disabled="!previewDoc || busyId === previewDoc.id"
+            @click="onApprove(previewDoc)"
+          >
+            通过
+          </button>
+          <button
+            type="button"
+            class="action-btn danger"
+            :disabled="!previewDoc || busyId === previewDoc.id"
+            @click="onReject(previewDoc)"
+          >
+            拒绝
+          </button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
 <script setup>
 import { onMounted, ref } from 'vue'
 import { listPendingDocs, approveDoc, rejectDoc } from '../../api/approvals'
+import { getDocument } from '../../api/documents'
+import { renderDocContent } from '../../utils/renderContent'
 
 const docs = ref([])
 const loading = ref(false)
 const busyId = ref(null)
 const error = ref('')
 const okMsg = ref('')
+
+const showPreview = ref(false)
+const previewDoc = ref(null)
+const previewTitle = ref('')
+const previewHtml = ref('')
+const previewLoading = ref(false)
+const previewError = ref('')
 
 function formatTime(iso) {
   if (!iso) return ''
@@ -73,13 +111,40 @@ async function refresh() {
   }
 }
 
+async function openPreview(d) {
+  previewDoc.value = d
+  previewTitle.value = d.title || '文档预览'
+  previewError.value = ''
+  previewHtml.value = ''
+  showPreview.value = true
+  previewLoading.value = true
+  try {
+    const detail = await getDocument(d.id)
+    previewTitle.value = detail.title || previewTitle.value
+    previewHtml.value = renderDocContent(detail.content)
+  } catch (e) {
+    previewError.value = e.detail || e.message || '加载预览失败'
+  } finally {
+    previewLoading.value = false
+  }
+}
+
+function closePreviewIfCurrent(d) {
+  if (showPreview.value && previewDoc.value?.id === d.id) {
+    showPreview.value = false
+    previewDoc.value = null
+  }
+}
+
 async function onApprove(d) {
+  if (!d) return
   busyId.value = d.id
   okMsg.value = ''
   error.value = ''
   try {
     await approveDoc(d.id)
     okMsg.value = `已通过「${d.title}」`
+    closePreviewIfCurrent(d)
     await refresh()
   } catch (e) {
     error.value = e.detail || e.message || '操作失败'
@@ -89,6 +154,7 @@ async function onApprove(d) {
 }
 
 async function onReject(d) {
+  if (!d) return
   if (!confirm(`确认拒绝「${d.title}」？`)) return
   busyId.value = d.id
   okMsg.value = ''
@@ -96,6 +162,7 @@ async function onReject(d) {
   try {
     await rejectDoc(d.id)
     okMsg.value = `已拒绝「${d.title}」`
+    closePreviewIfCurrent(d)
     await refresh()
   } catch (e) {
     error.value = e.detail || e.message || '操作失败'
@@ -142,4 +209,48 @@ tbody tr:hover { background: #eff6ff; }
 .action-btn:disabled { opacity: 0.6; cursor: not-allowed; }
 .error { color: var(--color-danger); }
 .ok { color: var(--color-success); }
+
+.modal-mask {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 50;
+  padding: 20px;
+}
+.modal {
+  width: 100%;
+  max-width: 420px;
+  background: #fff;
+  border-radius: 14px;
+  padding: 20px;
+  box-shadow: var(--shadow-lg);
+  max-height: 90vh;
+  overflow: auto;
+}
+.modal.wide { max-width: 720px; }
+.modal h3 { margin: 0 0 12px; }
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 16px;
+}
+.link-btn {
+  border: none;
+  background: transparent;
+  color: var(--color-primary);
+  cursor: pointer;
+}
+.doc-body {
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  padding: 12px 14px;
+  background: #f8fafc;
+  white-space: pre-wrap;
+  line-height: 1.6;
+}
+.doc-body :deep(p) { margin: 0.4em 0; }
 </style>
