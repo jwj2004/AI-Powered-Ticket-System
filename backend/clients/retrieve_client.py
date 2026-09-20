@@ -140,9 +140,10 @@ class RetrieveClient:
         role: str = "ops",
         top_k: int = 5,
     ) -> list[dict[str, Any]]:
+        pool = max(top_k, int(getattr(self.settings, "retrieve_candidate_k", top_k) or top_k))
         if self.settings.use_mock_retrieve:
-            return self._mock_chunks(query, role=role, top_k=top_k)
-        return self._http_chunks(query, role=role, top_k=top_k)
+            return self._mock_chunks(query, role=role, top_k=pool)
+        return self._http_chunks(query, role=role, top_k=pool)
 
     def reindex_document(self, document_id: int) -> bool:
         """管理员补文档后通知 A 重新向量化；A 未就绪时静默跳过。"""
@@ -164,9 +165,11 @@ class RetrieveClient:
             if not set(item["spaces"]) & allowed:
                 continue
             hits = sum(1 for kw in item["keywords"] if kw.lower() in q.lower())
-            if hits <= 0:
-                continue
-            score = min(0.99, float(item["score"]) + 0.01 * hits)
+            # 有关键词命中视为向量检索高分；无命中仍进候选池，交给 BM25 融合
+            if hits > 0:
+                score = min(0.99, float(item["score"]) + 0.01 * hits)
+            else:
+                score = round(0.12 + 0.02 * min(hits, 3), 4)
             scored.append(
                 {
                     "document_id": item["document_id"],
@@ -177,7 +180,8 @@ class RetrieveClient:
                 }
             )
         scored.sort(key=lambda x: x["score"], reverse=True)
-        return scored[: max(1, min(top_k, 5))] if scored else []
+        limit = max(1, min(top_k, len(scored))) if scored else 0
+        return scored[:limit] if scored else []
 
     def _http_chunks(self, query: str, *, role: str, top_k: int) -> list[dict[str, Any]]:
         url = f"{self.settings.retrieve_base_url.rstrip('/')}/api/retrieve"
@@ -190,9 +194,10 @@ class RetrieveClient:
         except httpx.HTTPError:
             return []
 
+        limit = max(1, min(top_k, 20))
         if data.get("chunks"):
             chunks = []
-            for item in data["chunks"][:5]:
+            for item in data["chunks"][:limit]:
                 chunks.append(
                     {
                         "document_id": item.get("document_id"),
@@ -207,7 +212,7 @@ class RetrieveClient:
         # 兼容工单副驾旧 retrieve：tickets → 临时当成文档块
         tickets = data.get("tickets") or []
         chunks = []
-        for idx, item in enumerate(tickets[:5]):
+        for idx, item in enumerate(tickets[:limit]):
             chunks.append(
                 {
                     "document_id": idx + 1,

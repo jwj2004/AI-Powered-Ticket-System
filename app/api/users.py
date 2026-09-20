@@ -6,6 +6,7 @@ from app.core.database import get_db
 from app.core.deps import require_admin
 from app.models.user import User
 from app.services.auth_service import create_user
+from app.services.log_service import log_action
 
 router = APIRouter(prefix="/api/users", tags=["用户管理"])
 
@@ -14,6 +15,29 @@ class CreateUserRequest(BaseModel):
     username: str
     password: str
     role: str = "newbie"
+
+
+@router.get("")
+def list_users(
+    db: Session = Depends(get_db),
+    user: User = Depends(require_admin),
+):
+    users = (
+        db.query(User)
+        .filter(User.status == "active")
+        .order_by(User.created_at.desc())
+        .all()
+    )
+    return [
+        {
+            "id": u.id,
+            "username": u.username,
+            "role": u.role,
+            "status": u.status,
+            "created_at": u.created_at.isoformat() if u.created_at else "",
+        }
+        for u in users
+    ]
 
 
 @router.post("")
@@ -65,6 +89,7 @@ def approve_user(
     if target.status != "pending":
         raise HTTPException(status_code=400, detail=f"用户状态为 {target.status}，无法审核")
     target.status = "active"
+    log_action(db, user.id, user.username, "approve_user", resource=f"user:{user_id}", detail=target.username)
     db.commit()
     return {"ok": True}
 
@@ -81,6 +106,7 @@ def reject_user(
     if target.status != "pending":
         raise HTTPException(status_code=400, detail=f"用户状态为 {target.status}，无法拒绝")
     target.status = "rejected"
+    log_action(db, user.id, user.username, "reject_user", resource=f"user:{user_id}", detail=target.username)
     db.commit()
     return {"ok": True}
 
@@ -97,5 +123,25 @@ def make_admin(
     if not target:
         raise HTTPException(status_code=404, detail="用户不存在")
     target.role = "admin"
+    log_action(db, user.id, user.username, "make_admin", resource=f"user:{user_id}", detail=target.username)
+    db.commit()
+    return {"ok": True}
+
+
+@router.post("/{user_id}/disable")
+def disable_user(
+    user_id: int,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_admin),
+):
+    if user_id == user.id:
+        raise HTTPException(status_code=400, detail="不能禁用自己")
+    target = db.query(User).filter(User.id == user_id).first()
+    if not target:
+        raise HTTPException(status_code=404, detail="用户不存在")
+    if target.status == "rejected":
+        raise HTTPException(status_code=400, detail="用户已被禁用")
+    target.status = "rejected"
+    log_action(db, user.id, user.username, "disable_user", resource=f"user:{user_id}", detail=target.username)
     db.commit()
     return {"ok": True}

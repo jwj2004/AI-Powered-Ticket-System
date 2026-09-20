@@ -132,3 +132,78 @@ class TestUserManagement:
     def test_approve_already_active(self, client, admin_headers):
         r = client.post("/api/users/2/approve", headers=admin_headers)
         assert r.status_code == 400
+
+
+class TestChangePassword:
+    def test_change_password_success(self, client, admin_headers):
+        r = client.post("/api/auth/change-password", json={"old_password": "admin123", "new_password": "newpass456"}, headers=admin_headers)
+        assert r.status_code == 200
+        assert r.json()["ok"] is True
+        login_r = client.post("/api/auth/login", json={"username": "testadmin", "password": "newpass456"})
+        assert login_r.status_code == 200
+
+    def test_change_password_wrong_old(self, client, admin_headers):
+        r = client.post("/api/auth/change-password", json={"old_password": "wrong", "new_password": "newpass456"}, headers=admin_headers)
+        assert r.status_code == 400
+        assert "原密码" in r.json()["detail"]
+
+    def test_change_password_too_short(self, client, admin_headers):
+        r = client.post("/api/auth/change-password", json={"old_password": "admin123", "new_password": "123"}, headers=admin_headers)
+        assert r.status_code == 400
+
+    def test_change_password_no_token(self, client):
+        r = client.post("/api/auth/change-password", json={"old_password": "x", "new_password": "123456"})
+        assert r.status_code in (401, 403, 422)
+
+
+class TestDisableUser:
+    def test_disable_user(self, client, admin_headers):
+        r = client.post("/api/users/2/disable", headers=admin_headers)
+        assert r.status_code == 200
+        assert r.json()["ok"] is True
+        login_r = client.post("/api/auth/login", json={"username": "testops", "password": "ops123"})
+        assert login_r.status_code == 403
+
+    def test_disable_self(self, client, admin_headers):
+        r = client.post("/api/users/1/disable", headers=admin_headers)
+        assert r.status_code == 400
+        assert "自己" in r.json()["detail"]
+
+    def test_disable_nonexistent(self, client, admin_headers):
+        r = client.post("/api/users/999/disable", headers=admin_headers)
+        assert r.status_code == 404
+
+    def test_disable_already_disabled(self, client, admin_headers):
+        client.post("/api/users/2/disable", headers=admin_headers)
+        r = client.post("/api/users/2/disable", headers=admin_headers)
+        assert r.status_code == 400
+
+    def test_disable_non_admin(self, client, newbie_headers):
+        r = client.post("/api/users/2/disable", headers=newbie_headers)
+        assert r.status_code == 403
+
+
+class TestListUsers:
+    def test_list_active_users(self, client, admin_headers):
+        r = client.get("/api/users", headers=admin_headers)
+        assert r.status_code == 200
+        assert isinstance(r.json(), list)
+        assert len(r.json()) >= 1
+        for u in r.json():
+            assert u["status"] == "active"
+
+    def test_list_users_includes_admin(self, client, admin_headers):
+        r = client.get("/api/users", headers=admin_headers)
+        assert r.status_code == 200
+        names = [u["username"] for u in r.json()]
+        assert "testadmin" in names
+
+    def test_list_users_excludes_pending(self, client, admin_headers):
+        client.post("/api/auth/register", json={"username": "pendinglist", "password": "123456"})
+        r = client.get("/api/users", headers=admin_headers)
+        names = [u["username"] for u in r.json()]
+        assert "pendinglist" not in names
+
+    def test_list_users_non_admin(self, client, newbie_headers):
+        r = client.get("/api/users", headers=newbie_headers)
+        assert r.status_code == 403

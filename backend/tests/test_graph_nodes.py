@@ -7,8 +7,8 @@ def test_five_node_names():
     assert graph_node_names() == [
         "n_route",
         "n_retrieve",
-        "n_generate",
         "n_quality",
+        "n_generate",
         "n_feedback",
     ]
 

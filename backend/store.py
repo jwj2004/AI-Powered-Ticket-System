@@ -1,14 +1,15 @@
-"""B 模块本地库：会话、消息、反馈、知识缺口、通知。"""
+"""会话读写 A 的 zhida.db（conversation / message）；缺口、通知、热门缓存仍由 B 建表。"""
 
 from __future__ import annotations
 
 import json
 import os
+import re
 import sqlite3
 from datetime import datetime
 from typing import Any, Optional
 
-from backend.config import get_settings
+from backend.config import sqlite_path
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS conversation (
@@ -57,6 +58,16 @@ CREATE TABLE IF NOT EXISTS notification (
     read INTEGER NOT NULL DEFAULT 0,
     created_at TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS hot_cache (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    question_key TEXT NOT NULL UNIQUE,
+    reply TEXT NOT NULL,
+    citations_json TEXT NOT NULL DEFAULT '[]',
+    confidence TEXT NOT NULL,
+    hit_count INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+);
 """
 
 
@@ -64,9 +75,42 @@ def now_iso() -> str:
     return datetime.now().isoformat(timespec="seconds")
 
 
+def _table_names(conn: sqlite3.Connection) -> set[str]:
+    rows = conn.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()
+    return {row[0] for row in rows}
+
+
+def _pick_table(conn: sqlite3.Connection, candidates: tuple[str, ...]) -> str:
+    names = _table_names(conn)
+    for name in candidates:
+        if name in names:
+            return name
+    return candidates[0]
+
+
+def conversation_table(conn: sqlite3.Connection) -> str:
+    return _pick_table(conn, ("conversation", "conversations"))
+
+
+def message_table(conn: sqlite3.Connection) -> str:
+    return _pick_table(conn, ("message", "messages"))
+
+
+def _columns(conn: sqlite3.Connection, table: str) -> set[str]:
+    return {row[1] for row in conn.execute(f'PRAGMA table_info("{table}")').fetchall()}
+
+
+def _insert(conn: sqlite3.Connection, table: str, data: dict[str, Any]) -> int:
+    cols = _columns(conn, table)
+    fields = [key for key in data if key in cols]
+    placeholders = ", ".join("?" for _ in fields)
+    sql = f'INSERT INTO "{table}" ({", ".join(fields)}) VALUES ({placeholders})'
+    cur = conn.execute(sql, [data[key] for key in fields])
+    return int(cur.lastrowid)
+
+
 def get_conn() -> sqlite3.Connection:
-    settings = get_settings()
-    path = settings.database_path
+    path = sqlite_path()
     parent = os.path.dirname(os.path.abspath(path))
     if parent:
         os.makedirs(parent, exist_ok=True)
@@ -89,13 +133,18 @@ def create_conversation(user_id: int, title: str) -> dict[str, Any]:
     title = (title or "新对话").strip()[:40] or "新对话"
     conn = get_conn()
     try:
-        cur = conn.execute(
-            "INSERT INTO conversation (user_id, title, created_at, updated_at) VALUES (?, ?, ?, ?)",
-            (user_id, title, ts, ts),
-        )
+        table = conversation_table(conn)
+        cols = _columns(conn, table)
+        data: dict[str, Any] = {"user_id": user_id, "title": title, "created_at": ts}
+        if "updated_at" in cols:
+            data["updated_at"] = ts
+        if "owner_id" in cols and "user_id" not in cols:
+            data["owner_id"] = user_id
+            data.pop("user_id", None)
+        row_id = _insert(conn, table, data)
         conn.commit()
         return {
-            "id": cur.lastrowid,
+            "id": row_id,
             "user_id": user_id,
             "title": title,
             "created_at": ts,
@@ -108,11 +157,17 @@ def create_conversation(user_id: int, title: str) -> dict[str, Any]:
 def get_conversation(conversation_id: int) -> Optional[dict[str, Any]]:
     conn = get_conn()
     try:
+        table = conversation_table(conn)
         row = conn.execute(
-            "SELECT * FROM conversation WHERE id = ?",
+            f'SELECT * FROM "{table}" WHERE id = ?',
             (conversation_id,),
         ).fetchone()
-        return dict(row) if row else None
+        if not row:
+            return None
+        data = dict(row)
+        if "user_id" not in data and data.get("owner_id") is not None:
+            data["user_id"] = data["owner_id"]
+        return data
     finally:
         conn.close()
 
@@ -120,10 +175,16 @@ def get_conversation(conversation_id: int) -> Optional[dict[str, Any]]:
 def touch_conversation(conversation_id: int) -> None:
     conn = get_conn()
     try:
-        conn.execute(
-            "UPDATE conversation SET updated_at = ? WHERE id = ?",
-            (now_iso(), conversation_id),
-        )
+        table = conversation_table(conn)
+        cols = _columns(conn, table)
+        ts = now_iso()
+        if "updated_at" in cols:
+            conn.execute(
+                f'UPDATE "{table}" SET updated_at = ? WHERE id = ?',
+                (ts, conversation_id),
+            )
+        elif "created_at" not in cols:
+            pass
         conn.commit()
     finally:
         conn.close()
@@ -132,19 +193,28 @@ def touch_conversation(conversation_id: int) -> None:
 def list_conversations(user_id: int) -> list[dict[str, Any]]:
     conn = get_conn()
     try:
+        table = conversation_table(conn)
+        cols = _columns(conn, table)
+        owner_col = "user_id" if "user_id" in cols else "owner_id"
+        order_col = next(
+            (name for name in ("updated_at", "created_at", "id") if name in cols),
+            "id",
+        )
+        select_title = "title" if "title" in cols else "id"
+        select_updated = order_col
         rows = conn.execute(
-            """
-            SELECT id, title, updated_at
-            FROM conversation
-            WHERE user_id = ?
-            ORDER BY updated_at DESC
-            """,
+            f'''
+            SELECT id, {select_title} AS title, {select_updated} AS updated_at
+            FROM "{table}"
+            WHERE {owner_col} = ?
+            ORDER BY {select_updated} DESC
+            ''',
             (user_id,),
         ).fetchall()
         return [
             {
                 "conversation_id": row["id"],
-                "title": row["title"],
+                "title": row["title"] if select_title == "title" else str(row["id"]),
                 "updated_at": row["updated_at"],
             }
             for row in rows
@@ -166,20 +236,29 @@ def add_message(
     citations_json = json.dumps(citations, ensure_ascii=False) if citations is not None else None
     conn = get_conn()
     try:
-        cur = conn.execute(
-            """
-            INSERT INTO message (
-                conversation_id, role, content, citations_json, confidence, gap_id, created_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?)
-            """,
-            (conversation_id, role, content, citations_json, confidence, gap_id, ts),
-        )
-        conn.execute(
-            "UPDATE conversation SET updated_at = ? WHERE id = ?",
-            (ts, conversation_id),
-        )
+        table = message_table(conn)
+        cols = _columns(conn, table)
+        data: dict[str, Any] = {
+            "conversation_id": conversation_id,
+            "role": role,
+            "content": content,
+            "created_at": ts,
+            "citations_json": citations_json,
+            "confidence": confidence,
+            "gap_id": gap_id,
+        }
+        if "citations" in cols and "citations_json" not in cols:
+            data["citations"] = citations_json
+        row_id = _insert(conn, table, data)
+        conv_table = conversation_table(conn)
+        conv_cols = _columns(conn, conv_table)
+        if "updated_at" in conv_cols:
+            conn.execute(
+                f'UPDATE "{conv_table}" SET updated_at = ? WHERE id = ?',
+                (ts, conversation_id),
+            )
         conn.commit()
-        return int(cur.lastrowid)
+        return row_id
     finally:
         conn.close()
 
@@ -187,13 +266,17 @@ def add_message(
 def list_messages(conversation_id: int) -> list[dict[str, Any]]:
     conn = get_conn()
     try:
+        table = message_table(conn)
+        cols = _columns(conn, table)
+        citation_col = "citations_json" if "citations_json" in cols else (
+            "citations" if "citations" in cols else None
+        )
         rows = conn.execute(
-            """
-            SELECT id, role, content, citations_json, confidence, gap_id, created_at
-            FROM message
+            f'''
+            SELECT * FROM "{table}"
             WHERE conversation_id = ?
             ORDER BY id ASC
-            """,
+            ''',
             (conversation_id,),
         ).fetchall()
         items: list[dict[str, Any]] = []
@@ -201,12 +284,18 @@ def list_messages(conversation_id: int) -> list[dict[str, Any]]:
             item: dict[str, Any] = {
                 "role": row["role"],
                 "content": row["content"],
-                "created_at": row["created_at"],
+                "created_at": row["created_at"] if "created_at" in row.keys() else None,
             }
             if row["role"] == "assistant":
-                citations = json.loads(row["citations_json"] or "[]")
+                raw = "[]"
+                if citation_col:
+                    raw = row[citation_col] or "[]"
+                if isinstance(raw, str):
+                    citations = json.loads(raw or "[]")
+                else:
+                    citations = raw or []
                 item["citations"] = citations
-                item["confidence"] = row["confidence"]
+                item["confidence"] = row["confidence"] if "confidence" in row.keys() else None
                 item["message_id"] = row["id"]
             items.append(item)
         return items
@@ -218,13 +307,14 @@ def last_turns(conversation_id: int, n_turns: int = 5) -> list[dict[str, str]]:
     """最近 n 轮（最多 2n 条消息），按时间正序。"""
     conn = get_conn()
     try:
+        table = message_table(conn)
         rows = conn.execute(
-            """
-            SELECT role, content FROM message
+            f'''
+            SELECT role, content FROM "{table}"
             WHERE conversation_id = ?
             ORDER BY id DESC
             LIMIT ?
-            """,
+            ''',
             (conversation_id, n_turns * 2),
         ).fetchall()
         items = [{"role": row["role"], "content": row["content"]} for row in reversed(rows)]
@@ -237,26 +327,30 @@ def last_user_question(user_id: int, exclude_conversation_id: Optional[int] = No
     """跨会话：该用户最近一条提问。"""
     conn = get_conn()
     try:
+        msg = message_table(conn)
+        conv = conversation_table(conn)
+        conv_cols = _columns(conn, conv)
+        owner_col = "user_id" if "user_id" in conv_cols else "owner_id"
         if exclude_conversation_id is None:
             row = conn.execute(
-                """
-                SELECT m.content FROM message m
-                JOIN conversation c ON c.id = m.conversation_id
-                WHERE c.user_id = ? AND m.role = 'user'
+                f'''
+                SELECT m.content FROM "{msg}" m
+                JOIN "{conv}" c ON c.id = m.conversation_id
+                WHERE c.{owner_col} = ? AND m.role = 'user'
                 ORDER BY m.id DESC
                 LIMIT 1
-                """,
+                ''',
                 (user_id,),
             ).fetchone()
         else:
             row = conn.execute(
-                """
-                SELECT m.content FROM message m
-                JOIN conversation c ON c.id = m.conversation_id
-                WHERE c.user_id = ? AND m.role = 'user' AND m.conversation_id != ?
+                f'''
+                SELECT m.content FROM "{msg}" m
+                JOIN "{conv}" c ON c.id = m.conversation_id
+                WHERE c.{owner_col} = ? AND m.role = 'user' AND m.conversation_id != ?
                 ORDER BY m.id DESC
                 LIMIT 1
-                """,
+                ''',
                 (user_id, exclude_conversation_id),
             ).fetchone()
         return row["content"] if row else None
@@ -267,15 +361,19 @@ def last_user_question(user_id: int, exclude_conversation_id: Optional[int] = No
 def get_message(message_id: int) -> Optional[dict[str, Any]]:
     conn = get_conn()
     try:
-        row = conn.execute("SELECT * FROM message WHERE id = ?", (message_id,)).fetchone()
+        msg = message_table(conn)
+        conv = conversation_table(conn)
+        conv_cols = _columns(conn, conv)
+        owner_col = "user_id" if "user_id" in conv_cols else "owner_id"
+        row = conn.execute(f'SELECT * FROM "{msg}" WHERE id = ?', (message_id,)).fetchone()
         if not row:
             return None
         data = dict(row)
-        conv = conn.execute(
-            "SELECT user_id FROM conversation WHERE id = ?",
+        owner = conn.execute(
+            f'SELECT {owner_col} AS user_id FROM "{conv}" WHERE id = ?',
             (data["conversation_id"],),
         ).fetchone()
-        data["user_id"] = conv["user_id"] if conv else None
+        data["user_id"] = owner["user_id"] if owner else None
         return data
     finally:
         conn.close()
@@ -420,6 +518,81 @@ def list_notifications(user_id: int) -> list[dict[str, Any]]:
             }
             for row in rows
         ]
+    finally:
+        conn.close()
+
+
+_HOT_KEY_RE = re.compile(r"[\s？?！!。，,、.；;：:]+")
+
+
+def normalize_question_key(question: str) -> str:
+    return _HOT_KEY_RE.sub("", (question or "").strip().lower())
+
+
+def get_hot_cache(question: str, *, min_hits: int) -> Optional[dict[str, Any]]:
+    """高频且已有高质量答案时直接返回缓存。"""
+    key = normalize_question_key(question)
+    if not key:
+        return None
+    conn = get_conn()
+    try:
+        row = conn.execute(
+            "SELECT * FROM hot_cache WHERE question_key = ?",
+            (key,),
+        ).fetchone()
+        if not row:
+            return None
+        if int(row["hit_count"]) < min_hits:
+            return None
+        if row["confidence"] not in {"high", "medium"}:
+            return None
+        ts = now_iso()
+        conn.execute(
+            "UPDATE hot_cache SET hit_count = hit_count + 1, updated_at = ? WHERE question_key = ?",
+            (ts, key),
+        )
+        conn.commit()
+        return {
+            "reply": row["reply"],
+            "citations": json.loads(row["citations_json"] or "[]"),
+            "confidence": row["confidence"],
+            "from_cache": True,
+        }
+    finally:
+        conn.close()
+
+
+def save_hot_cache(
+    question: str,
+    *,
+    reply: str,
+    citations: list[dict[str, Any]],
+    confidence: str,
+) -> None:
+    if confidence not in {"high", "medium"} or not (reply or "").strip():
+        return
+    key = normalize_question_key(question)
+    if not key:
+        return
+    ts = now_iso()
+    citations_json = json.dumps(citations or [], ensure_ascii=False)
+    conn = get_conn()
+    try:
+        conn.execute(
+            """
+            INSERT INTO hot_cache (
+                question_key, reply, citations_json, confidence, hit_count, created_at, updated_at
+            ) VALUES (?, ?, ?, ?, 1, ?, ?)
+            ON CONFLICT(question_key) DO UPDATE SET
+                reply = excluded.reply,
+                citations_json = excluded.citations_json,
+                confidence = excluded.confidence,
+                hit_count = hot_cache.hit_count + 1,
+                updated_at = excluded.updated_at
+            """,
+            (key, reply, citations_json, confidence, ts, ts),
+        )
+        conn.commit()
     finally:
         conn.close()
 

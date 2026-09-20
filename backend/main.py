@@ -11,6 +11,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from backend.config import get_settings
 from backend.routers import router as b_router
+from app.api.chat import router as chat_router
 from backend import store
 
 logging.basicConfig(
@@ -29,8 +30,8 @@ async def lifespan(_app: FastAPI):
 
 app = FastAPI(
     title="知答 · 生成与编排（B 模块）",
-    version="0.2.0",
-    description="企业知识库问答 Agent：POST /api/chat，证据不足时记入知识缺口。",
+    version="0.3.0",
+    description="企业知识库问答 Agent：POST /api/chat 支持 JSON 与 SSE 流式。",
     lifespan=lifespan,
 )
 
@@ -42,9 +43,10 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+app.include_router(chat_router)
 app.include_router(b_router)
 
 
 @app.get("/api/health")
 def health() -> dict[str, str]:
-    return {"status": "ok", "service": "zhida-b", "version": "0.2"}
+    return {"status": "ok", "service": "zhida-b", "version": "0.3"}

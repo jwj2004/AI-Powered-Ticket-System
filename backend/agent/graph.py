@@ -1,15 +1,18 @@
-"""LangGraph 五节点：路由 → 检索 → 生成 → 质量 → 反馈。"""
+"""LangGraph 五节点：路由 → 检索 → 质量 → 生成 → 反馈。"""
 
 from __future__ import annotations
 
 import logging
-from typing import Any, Optional, TypedDict
+from typing import Any, Iterator, Optional, TypedDict
 
 from openai import OpenAI
 
 from backend.agent import prompts, rules
 from backend.clients.retrieve_client import RetrieveClient, extract_error_code
-from backend.config import Settings, get_settings
+from backend.config import get_settings
+from backend.retrieve.hybrid import hybrid_rerank_chunks
+from backend.retrieve.rerank import rerank_chunks
+from backend.retrieve.rewrite import rewrite_query
 from backend import store
 
 logger = logging.getLogger(__name__)
@@ -22,6 +25,7 @@ class AgentState(TypedDict, total=False):
     role: str
     history: list
     route_kind: str
+    rewritten_query: str
     lookup: Optional[dict[str, Any]]
     chunks: list
     reply: str
@@ -31,6 +35,7 @@ class AgentState(TypedDict, total=False):
     create_gap: bool
     persist_gap: bool
     awaiting_feedback: bool
+    from_cache: bool
 
 
 def _patch_langchain_debug() -> None:
@@ -56,39 +61,48 @@ def route_node(state: AgentState) -> dict[str, Any]:
 
 
 def retrieve_node(state: AgentState) -> dict[str, Any]:
-    """检索：错误码直查优先，否则向量召回 top5。"""
+    """检索：先改写查询，再向量召回 + BM25 融合，最后 cross-encoder 重排。"""
     question = state.get("message") or ""
     role = state.get("role") or "ops"
+    history = state.get("history") or []
+    settings = get_settings()
     client = _client()
+
+    rewritten = question
+    if settings.enable_query_rewrite:
+        rewritten = rewrite_query(question, history=history) or question
+
     lookup = None
     if state.get("route_kind") == "lookup":
-        code = extract_error_code(question)
+        code = extract_error_code(question) or extract_error_code(rewritten)
         lookup = client.lookup(code) if code else None
+
     chunks: list[dict[str, Any]] = []
     if not lookup:
-        chunks = client.retrieve_chunks(question, role=role, top_k=5)
-    return {"lookup": lookup, "chunks": chunks}
-
-
-def _llm_generate(messages: list[dict[str, str]], settings: Settings, fallback: str) -> str:
-    if not settings.llm_api_key:
-        return fallback
-    try:
-        client = OpenAI(
-            api_key=settings.llm_api_key,
-            base_url=settings.llm_base_url,
-            timeout=settings.llm_timeout_seconds,
+        raw = client.retrieve_chunks(
+            rewritten,
+            role=role,
+            top_k=settings.retrieve_candidate_k,
         )
-        resp = client.chat.completions.create(
-            model=settings.llm_model,
-            messages=messages,
-            temperature=0.2,
+        if not raw and rewritten != question:
+            raw = client.retrieve_chunks(
+                question,
+                role=role,
+                top_k=settings.retrieve_candidate_k,
+            )
+        fused = (
+            hybrid_rerank_chunks(rewritten, raw, top_k=max(settings.retrieve_top_k, 8))
+            if settings.enable_hybrid_retrieve
+            else raw
         )
-        content = (resp.choices[0].message.content or "").strip()
-        return content or fallback
-    except Exception as exc:  # noqa: BLE001
-        logger.warning("LLM 调用失败，回退模板: %s", exc)
-        return fallback
+        ranked = rerank_chunks(rewritten, fused, top_k=max(settings.retrieve_top_k, 8))
+        strong = [
+            c
+            for c in ranked
+            if float(c.get("score") or 0.0) >= settings.medium_score_threshold
+        ]
+        chunks = (strong or ranked)[: settings.retrieve_top_k]
+    return {"lookup": lookup, "chunks": chunks, "rewritten_query": rewritten}
 
 
 def _template_from_lookup(lookup: dict[str, Any]) -> str:
@@ -108,8 +122,21 @@ def _template_from_chunks(chunks: list[dict[str, Any]]) -> str:
     return "\n".join(parts)
 
 
-def generate_node(state: AgentState) -> dict[str, Any]:
-    """生成：只根据 lookup / 文档块拼证据写回答。"""
+def _chunk_text(text: str, size: int = 2) -> Iterator[str]:
+    text = text or ""
+    if not text:
+        return
+    for i in range(0, len(text), size):
+        yield text[i : i + size]
+
+
+def iter_reply_tokens(state: AgentState) -> Iterator[str]:
+    """真正流式：有 LLM Key 时按 token 推；否则把模板回答切成小段。"""
+    existing = (state.get("reply") or "").strip()
+    if existing and (state.get("from_cache") or (state.get("confidence") or "") == "low"):
+        yield from _chunk_text(existing)
+        return
+
     settings = get_settings()
     question = state.get("message") or ""
     history = state.get("history") or []
@@ -120,15 +147,55 @@ def generate_node(state: AgentState) -> dict[str, Any]:
         messages = prompts.build_lookup_prompt(
             question=question, lookup=lookup, history=history
         )
-        return {"reply": _llm_generate(messages, settings, _template_from_lookup(lookup))}
-
-    if chunks:
+        fallback = _template_from_lookup(lookup)
+    elif chunks:
         messages = prompts.build_rag_prompt(
             question=question, chunks=chunks, history=history
         )
-        return {"reply": _llm_generate(messages, settings, _template_from_chunks(chunks))}
+        fallback = _template_from_chunks(chunks)
+    else:
+        yield from _chunk_text(state.get("reply") or "")
+        return
 
-    return {"reply": ""}
+    if not settings.llm_api_key:
+        yield from _chunk_text(fallback)
+        return
+
+    try:
+        client = OpenAI(
+            api_key=settings.llm_api_key,
+            base_url=settings.llm_base_url,
+            timeout=settings.llm_timeout_seconds,
+        )
+        stream = client.chat.completions.create(
+            model=settings.llm_model,
+            messages=messages,
+            temperature=0.2,
+            stream=True,
+        )
+        got = False
+        for event in stream:
+            delta = ""
+            try:
+                delta = event.choices[0].delta.content or ""
+            except (AttributeError, IndexError):
+                delta = ""
+            if delta:
+                got = True
+                yield delta
+        if not got:
+            yield from _chunk_text(fallback)
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("LLM 流式调用失败，回退模板: %s", exc)
+        yield from _chunk_text(fallback)
+
+
+def generate_node(state: AgentState) -> dict[str, Any]:
+    """生成：只根据 lookup / 文档块拼证据写回答。"""
+    if (state.get("confidence") or "") == "low" and (state.get("reply") or "").strip():
+        return {}
+    reply = "".join(iter_reply_tokens(state)).strip()
+    return {"reply": reply}
 
 
 def quality_node(state: AgentState) -> dict[str, Any]:
@@ -153,9 +220,10 @@ def quality_node(state: AgentState) -> dict[str, Any]:
             "create_gap": False,
         }
 
-    if rules.chunks_are_strong(chunks):
+    level = rules.confidence_level(chunks)
+    if level in {"high", "medium"}:
         return {
-            "confidence": "high",
+            "confidence": level,
             "citations": rules.citations_from_chunks(chunks),
             "create_gap": False,
         }
@@ -197,8 +265,8 @@ def build_graph():
         graph = StateGraph(AgentState)
         graph.add_node("n_route", route_node)
         graph.add_node("n_retrieve", retrieve_node)
-        graph.add_node("n_generate", generate_node)
         graph.add_node("n_quality", quality_node)
+        graph.add_node("n_generate", generate_node)
         graph.add_node("n_feedback", feedback_node)
         graph.add_edge(START, "n_route")
         graph.add_conditional_edges(
@@ -209,9 +277,9 @@ def build_graph():
                 "quality": "n_quality",
             },
         )
-        graph.add_edge("n_retrieve", "n_generate")
-        graph.add_edge("n_generate", "n_quality")
-        graph.add_edge("n_quality", "n_feedback")
+        graph.add_edge("n_retrieve", "n_quality")
+        graph.add_edge("n_quality", "n_generate")
+        graph.add_edge("n_generate", "n_feedback")
         graph.add_edge("n_feedback", END)
         compiled = graph.compile()
         return _SafeGraph(compiled)
@@ -245,8 +313,8 @@ class _LocalGraph:
         state = {**state, **route_node(state)}  # type: ignore[arg-type]
         if dispatch_from_route(state) == "retrieve":  # type: ignore[arg-type]
             state = {**state, **retrieve_node(state)}  # type: ignore[arg-type]
-            state = {**state, **generate_node(state)}  # type: ignore[arg-type]
         state = {**state, **quality_node(state)}  # type: ignore[arg-type]
+        state = {**state, **generate_node(state)}  # type: ignore[arg-type]
         state = {**state, **feedback_node(state)}  # type: ignore[arg-type]
         return state
 
@@ -262,4 +330,13 @@ def get_graph():
 
 
 def graph_node_names() -> list[str]:
-    return ["n_route", "n_retrieve", "n_generate", "n_quality", "n_feedback"]
+    return ["n_route", "n_retrieve", "n_quality", "n_generate", "n_feedback"]
+
+
+def prepare_state(state: dict[str, Any]) -> dict[str, Any]:
+    """流式路径：跑到质量节点为止，生成由 token 迭代器负责。"""
+    state = {**state, **route_node(state)}  # type: ignore[arg-type]
+    if dispatch_from_route(state) == "retrieve":  # type: ignore[arg-type]
+        state = {**state, **retrieve_node(state)}  # type: ignore[arg-type]
+    state = {**state, **quality_node(state)}  # type: ignore[arg-type]
+    return state

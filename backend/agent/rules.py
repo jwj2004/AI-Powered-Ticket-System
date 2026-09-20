@@ -34,6 +34,12 @@ def classify_route(question: str) -> str:
     return "rag"
 
 
+def best_chunk_score(chunks: list[dict[str, Any]]) -> float:
+    if not chunks:
+        return 0.0
+    return max(float(c.get("score") or 0.0) for c in chunks)
+
+
 def chunks_are_strong(
     chunks: list[dict[str, Any]],
     high_score_threshold: Optional[float] = None,
@@ -45,14 +51,43 @@ def chunks_are_strong(
         if high_score_threshold is not None
         else get_settings().high_score_threshold
     )
-    return any(float(c.get("score") or 0.0) >= threshold for c in chunks)
+    return best_chunk_score(chunks) >= threshold
+
+
+def confidence_level(
+    chunks: list[dict[str, Any]],
+    *,
+    high_score_threshold: Optional[float] = None,
+    medium_score_threshold: Optional[float] = None,
+) -> str:
+    """v3：high / medium / low。"""
+    settings = get_settings()
+    high = (
+        high_score_threshold
+        if high_score_threshold is not None
+        else settings.high_score_threshold
+    )
+    medium = (
+        medium_score_threshold
+        if medium_score_threshold is not None
+        else settings.medium_score_threshold
+    )
+    score = best_chunk_score(chunks)
+    if score >= high:
+        return "high"
+    if score >= medium:
+        return "medium"
+    return "low"
 
 
 def citations_from_chunks(chunks: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    threshold = get_settings().medium_score_threshold
     items = []
     for c in chunks[:5]:
         doc_id = c.get("document_id")
         if doc_id is None:
+            continue
+        if float(c.get("score") or 0.0) < threshold:
             continue
         items.append(
             {

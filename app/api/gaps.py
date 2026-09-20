@@ -8,6 +8,7 @@ from app.core.deps import require_admin
 from app.models.user import User
 from app.models.knowledge_gap import KnowledgeGap
 from app.models.notification import Notification
+from app.services.log_service import log_action
 
 router = APIRouter(prefix="/api/gaps", tags=["知识缺口"])
 
@@ -63,5 +64,33 @@ def resolve_gap(
         read=False,
     )
     db.add(notification)
+    log_action(db, user.id, user.username, "resolve_gap", resource=f"gap:{gap_id}", detail=req.answer[:50])
     db.commit()
     return {"ok": True, "notified_user_id": gap.user_id}
+
+
+class MergeRequest(BaseModel):
+    target_gap_id: int
+
+
+@router.post("/{gap_id}/merge")
+def merge_gaps(
+    gap_id: int,
+    req: MergeRequest,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_admin),
+):
+    source = db.query(KnowledgeGap).filter(KnowledgeGap.id == gap_id).first()
+    target = db.query(KnowledgeGap).filter(KnowledgeGap.id == req.target_gap_id).first()
+    if not source or not target:
+        raise HTTPException(status_code=404, detail="缺口不存在")
+    if source.id == target.id:
+        raise HTTPException(status_code=400, detail="不能合并到自己")
+    target.question_count = (target.question_count or 1) + (source.question_count or 1)
+    if source.answer and not target.answer:
+        target.answer = source.answer
+        target.status = "resolved"
+    db.delete(source)
+    log_action(db, user.id, user.username, "merge_gap", resource=f"gap:{gap_id}->gap:{req.target_gap_id}")
+    db.commit()
+    return {"ok": True, "merged_into": target.id}

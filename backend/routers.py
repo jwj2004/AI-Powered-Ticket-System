@@ -1,13 +1,15 @@
-"""B 负责的 HTTP 路由：登录（独立联调）、问答、会话、反馈、缺口闭环、通知。"""
+"""B 负责的 HTTP 路由：登录（独立联调）、会话、反馈、缺口闭环、通知。
+
+问答入口只在 app/api/chat.py，这里不再注册 /api/chat。
+"""
 
 from __future__ import annotations
 
-from typing import Any, Literal, Optional
+from typing import Any, Optional
 
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import AliasChoices, BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, field_validator
 
-from backend.agent.service import run_chat
 from backend.auth import CurrentUser, create_access_token, find_seed_user, get_current_user, require_admin
 from backend.clients.retrieve_client import RetrieveClient
 from backend import store
@@ -18,42 +20,6 @@ router = APIRouter()
 class LoginRequest(BaseModel):
     username: str
     password: str
-
-
-class ChatRequest(BaseModel):
-    """契约字段为 message。联调期间若前端仍传 query，也映射到 message。"""
-
-    model_config = ConfigDict(populate_by_name=True)
-
-    message: str = Field(
-        ...,
-        validation_alias=AliasChoices("message", "query"),
-        description="用户问题（契约字段名 message）",
-    )
-    conversation_id: Optional[int] = None
-
-    @field_validator("message")
-    @classmethod
-    def message_not_blank(cls, value: str) -> str:
-        text = value.strip()
-        if not text:
-            raise ValueError("message 不能为空")
-        return text
-
-
-class Citation(BaseModel):
-    document_id: int
-    title: str
-    chunk_index: int
-
-
-class ChatResponse(BaseModel):
-    conversation_id: int
-    reply: str
-    citations: list[Citation] = Field(default_factory=list)
-    confidence: Literal["high", "low"]
-    message_id: int
-    gap_id: Optional[int] = None
 
 
 class FeedbackRequest(BaseModel):
@@ -88,22 +54,6 @@ def login(body: LoginRequest) -> dict[str, Any]:
     return {"token": token, "role": row["role"], "username": row["username"]}
 
 
-@router.post("/api/chat", response_model=ChatResponse, response_model_exclude_none=True)
-def chat(body: ChatRequest, user: CurrentUser = Depends(get_current_user)) -> ChatResponse:
-    store.init_db()
-    try:
-        result = run_chat(
-            message=body.message,
-            conversation_id=body.conversation_id,
-            user=user,
-        )
-    except PermissionError as exc:
-        raise HTTPException(status_code=404, detail=str(exc)) from exc
-    except Exception as exc:  # noqa: BLE001
-        raise HTTPException(status_code=500, detail=f"问答失败: {exc}") from exc
-    return ChatResponse(**result)
-
-
 @router.post("/api/feedback")
 def feedback(body: FeedbackRequest, user: CurrentUser = Depends(get_current_user)) -> dict[str, bool]:
     store.init_db()
@@ -117,7 +67,6 @@ def feedback(body: FeedbackRequest, user: CurrentUser = Depends(get_current_user
 
     store.add_feedback(body.message_id, user.id, body.useful)
 
-    # 踩多了进入缺口榜单
     if not body.useful and store.count_thumbs_down(body.message_id) >= 1:
         if not msg.get("gap_id"):
             conv_messages = store.list_messages(msg["conversation_id"])
@@ -157,10 +106,11 @@ def conversation_messages(
 
 
 @router.get("/api/gaps")
-def list_gaps(user: CurrentUser = Depends(get_current_user)) -> list[dict[str, Any]]:
+def list_gaps(user: CurrentUser = Depends(get_current_user)) -> dict[str, Any]:
     require_admin(user)
     store.init_db()
-    return store.list_gaps()
+    items = store.list_gaps()
+    return {"total": len(items), "items": items}
 
 
 @router.post("/api/gaps/{gap_id}/resolve")
@@ -185,9 +135,11 @@ def resolve_gap(
 
 
 @router.get("/api/notifications")
-def notifications(user: CurrentUser = Depends(get_current_user)) -> list[dict[str, Any]]:
+def notifications(user: CurrentUser = Depends(get_current_user)) -> dict[str, Any]:
     store.init_db()
-    return store.list_notifications(user.id)
+    items = store.list_notifications(user.id)
+    unread = sum(1 for item in items if not item.get("read"))
+    return {"total": len(items), "unread": unread, "items": items}
 
 
 @router.post("/api/notifications/{notification_id}/read")
