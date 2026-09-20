@@ -53,17 +53,30 @@
           aria-label="搜索会话"
         />
         <div v-if="convLoading" class="muted pad">加载中...</div>
-        <button
+        <div
           v-for="c in filteredConversations"
           :key="c.conversation_id"
-          type="button"
           class="conv-item"
           :class="{ active: conversationId === c.conversation_id }"
+          role="button"
+          tabindex="0"
           @click="onSelectConversation(c.conversation_id)"
+          @keydown.enter.prevent="onSelectConversation(c.conversation_id)"
         >
-          <div class="conv-title">{{ c.title }}</div>
-          <div class="conv-time">{{ formatTime(c.updated_at) }}</div>
-        </button>
+          <div class="conv-main">
+            <div class="conv-title">{{ c.title }}</div>
+            <div class="conv-time">{{ formatTime(c.updated_at) }}</div>
+          </div>
+          <button
+            type="button"
+            class="conv-del"
+            title="删除会话"
+            aria-label="删除会话"
+            @click.stop="onDeleteConversation(c)"
+          >
+            🗑
+          </button>
+        </div>
         <p v-if="!convLoading && !conversations.length" class="muted pad">暂无历史会话</p>
         <p v-else-if="!convLoading && conversations.length && !filteredConversations.length" class="muted pad">
           无匹配会话
@@ -73,8 +86,8 @@
       <main class="main">
         <div ref="listEl" class="messages">
           <div v-if="!messages.length && !loading" class="placeholder">
-            <p>开始提问吧</p>
-            <p class="muted">试试「订单导出超时」或「支付回调」；输入「没有答案」可看低置信度样式</p>
+            <p>{{ emptyHint }}</p>
+            <p v-if="emptyHint !== '开始新对话'" class="muted">试试「订单导出超时」或「支付回调」；输入「没有答案」可看低置信度样式</p>
           </div>
 
           <div
@@ -199,7 +212,7 @@
 import { computed, nextTick, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { getUsername, getRole, clearAuth } from '../api/authStorage'
-import { chat, chatStream, sendFeedback, getCitationChunk, listConversations, listMessages } from '../api/chat'
+import { chat, chatStream, sendFeedback, getCitationChunk, listConversations, listMessages, deleteConversation } from '../api/chat'
 import { USE_MOCK } from '../api/http'
 import { listNotifications, markNotificationRead } from '../api/notifications'
 import { typewrite } from '../utils/typewriter'
@@ -215,6 +228,7 @@ const historyLoading = ref(false)
 const error = ref('')
 const conversationId = ref(null)
 const messages = ref([])
+const emptyHint = ref('开始提问吧')
 const listEl = ref(null)
 const citationDetail = ref(null)
 
@@ -293,8 +307,29 @@ function onNewChat() {
   cancelTypewriter()
   conversationId.value = null
   messages.value = []
+  emptyHint.value = '开始提问吧'
   error.value = ''
   input.value = ''
+}
+
+async function onDeleteConversation(item) {
+  if (!confirm('确认删除这个会话？')) return
+  error.value = ''
+  try {
+    await deleteConversation(item.conversation_id)
+    conversations.value = conversations.value.filter(
+      (c) => c.conversation_id !== item.conversation_id,
+    )
+    if (conversationId.value === item.conversation_id) {
+      cancelTypewriter()
+      conversationId.value = null
+      messages.value = []
+      input.value = ''
+      emptyHint.value = '开始新对话'
+    }
+  } catch (e) {
+    error.value = e.detail || e.message || '删除会话失败'
+  }
 }
 
 async function onSelectConversation(id) {
@@ -616,13 +651,15 @@ h1 { margin: 0; font-size: 18px; color: var(--color-text); }
   box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.15);
 }
 .conv-item {
-  display: block;
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
   width: 100%;
   text-align: left;
   border: 1px solid transparent;
   background: transparent;
   border-radius: var(--radius-sm);
-  padding: 9px 10px;
+  padding: 9px 8px 9px 10px;
   margin-bottom: 4px;
   cursor: pointer;
 }
@@ -631,6 +668,23 @@ h1 { margin: 0; font-size: 18px; color: var(--color-text); }
   background: var(--color-primary-soft);
   border-color: #bfdbfe;
 }
+.conv-main { min-width: 0; flex: 1; }
+.conv-del {
+  flex-shrink: 0;
+  border: none;
+  background: transparent;
+  color: #9ca3af;
+  cursor: pointer;
+  opacity: 0;
+  padding: 0 2px;
+  font-size: 14px;
+  line-height: 1;
+}
+.conv-item:hover .conv-del,
+.conv-item:focus-within .conv-del {
+  opacity: 1;
+}
+.conv-del:hover { color: var(--color-danger); }
 .conv-title {
   font-size: 13px;
   font-weight: 600;

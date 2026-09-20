@@ -245,3 +245,16 @@ export async function listMessages(conversationId) {
   }
   return request(`/api/conversations/${conversationId}/messages`)
 }
+
+/** DELETE /api/conversations/{id} */
+export async function deleteConversation(id) {
+  if (USE_MOCK) {
+    await delay(150)
+    const num = Number(id)
+    const idx = MOCK_CONVERSATIONS.findIndex((c) => c.conversation_id === num)
+    if (idx >= 0) MOCK_CONVERSATIONS.splice(idx, 1)
+    delete MOCK_CONVERSATION_MESSAGES[num]
+    return { ok: true }
+  }
+  return request(`/api/conversations/${id}`, { method: 'DELETE' })
+}
