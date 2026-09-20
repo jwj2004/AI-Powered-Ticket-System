@@ -107,6 +107,38 @@ export async function rejectUser(id) {
   return request(`/api/users/${id}/reject`, { method: 'POST' })
 }
 
+/** PATCH /api/users/{id}  body: { role } */
+export async function updateRole(id, role) {
+  if (USE_MOCK) {
+    const num = Number(id)
+    const me = getUsername()
+    const u = MOCK_ACTIVE_USERS.find((x) => x.id === num)
+    if (!u) {
+      const err = new Error('用户不存在')
+      err.detail = '用户不存在'
+      throw err
+    }
+    if (me && u.username === me) {
+      const err = new Error('不能修改自己的角色')
+      err.detail = '不能修改自己的角色'
+      throw err
+    }
+    if (!['admin', 'ops', 'newbie'].includes(role)) {
+      const err = new Error('role 必须是 admin/ops/newbie')
+      err.detail = 'role 必须是 admin/ops/newbie'
+      throw err
+    }
+    u.role = role
+    const mu = MOCK_USERS[u.username]
+    if (mu) mu.role = role
+    return { ok: true }
+  }
+  return request(`/api/users/${id}`, {
+    method: 'PATCH',
+    body: JSON.stringify({ role }),
+  })
+}
+
 /** POST /api/users/{id}/make-admin */
 export async function makeAdmin(id) {
   if (USE_MOCK) {

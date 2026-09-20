@@ -95,7 +95,18 @@
           </tr>
           <tr v-for="u in active" :key="u.id">
             <td>{{ u.username }}</td>
-            <td>{{ u.role }}</td>
+            <td>
+              <select
+                class="role-select"
+                :value="u.role"
+                :disabled="u.username === me || busyId === u.id"
+                @change="onRoleChange(u, $event)"
+              >
+                <option value="admin">admin</option>
+                <option value="ops">ops</option>
+                <option value="newbie">newbie</option>
+              </select>
+            </td>
             <td>
               <span class="status" :class="u.status === 'disabled' ? 'disabled' : 'active'">
                 {{ u.status === 'disabled' ? '已禁用' : (u.status || 'active') }}
@@ -141,6 +152,7 @@ import {
   rejectUser,
   makeAdmin,
   disableUser,
+  updateRole,
 } from '../../api/users'
 
 const me = getUsername() || ''
@@ -211,6 +223,30 @@ async function onReject(u) {
     await loadPending()
   } catch (e) {
     error.value = e.detail || e.message || '操作失败'
+  } finally {
+    busyId.value = null
+  }
+}
+
+async function onRoleChange(u, event) {
+  const next = event.target.value
+  const prev = u.role
+  if (u.username === me) {
+    event.target.value = prev
+    error.value = '不能修改自己的角色'
+    return
+  }
+  if (next === prev) return
+  busyId.value = u.id
+  error.value = ''
+  okMsg.value = ''
+  try {
+    await updateRole(u.id, next)
+    u.role = next
+    okMsg.value = '角色已更新'
+  } catch (e) {
+    event.target.value = prev
+    error.value = e.detail || e.message || '角色更新失败'
   } finally {
     busyId.value = null
   }
@@ -355,6 +391,19 @@ tbody tr:hover { background: #eff6ff; }
   padding: 2px 8px;
   border-radius: var(--radius-pill);
   font-size: 12px;
+}
+.role-select {
+  border: 1px solid var(--color-border);
+  background: #fff;
+  color: var(--color-text, #0f172a);
+  border-radius: var(--radius-sm);
+  padding: 4px 8px;
+  font-size: 13px;
+}
+.role-select:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  background: #f8fafc;
 }
 .status.active { background: #ecfdf5; color: var(--color-success); }
 .status.disabled { background: #fef2f2; color: var(--color-danger); }
