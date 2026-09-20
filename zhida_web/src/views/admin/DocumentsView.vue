@@ -152,7 +152,7 @@ import {
   getDocumentVersion,
 } from '../../api/documents'
 import { listDocSpaces } from '../../api/auth'
-import { withCitationCounts } from '../../api/stats'
+import { listDocCitations, withCitationCounts } from '../../api/stats'
 import RichTextEditor from '../../components/RichTextEditor.vue'
 import { renderDocContent } from '../../utils/renderContent'
 
@@ -223,7 +223,8 @@ function toEditorHtml(content) {
 async function refresh() {
   error.value = ''
   try {
-    docs.value = withCitationCounts(await listDocuments())
+    const [list, stats] = await Promise.all([listDocuments(), listDocCitations()])
+    docs.value = withCitationCounts(list, stats)
   } catch (e) {
     error.value = e.detail || e.message || '加载文档失败'
   }
