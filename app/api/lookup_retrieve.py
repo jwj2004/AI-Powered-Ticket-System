@@ -9,9 +9,9 @@ from app.core.database import get_db
 from app.core.logger import log
 from app.schemas import (
     LookupResponse,
+    RetrieveChunk,
     RetrieveRequest,
     RetrieveResponse,
-    RetrieveTicket,
 )
 from app.services import (
     lookup_error_code,
@@ -54,42 +54,45 @@ def api_retrieve(req: RetrieveRequest, db: Session = Depends(get_db)):
     内部向量检索接口（B 调 A）
 
     1. 先从文本里识别错误码（精确匹配）
-    2. 再用 FAISS 向量召回 top_k 相似工单
+    2. 再用文档 FAISS 召回 top_k 切块
     """
     log.info(f"[retrieve] query={req.query[:50]}, customer_id={req.customer_id}")
 
-    # Step 1: 错误码识别
     error_code = detect_error_code(req.query)
 
-    # Step 2: 向量检索
-    VectorRetriever.ensure_init()
-    search_results = VectorRetriever.search(req.query, top_k=req.top_k)
+    from app.models.document import Document
+    from app.models.document_chunk import DocumentChunk
 
-    # Step 3: 组装工单详情
-    from app.models import Ticket
-    tickets = []
-    for ticket_id, score in search_results:
-        ticket = db.query(Ticket).filter(Ticket.ticket_id == ticket_id).first()
-        if ticket:
-            # 如果工单本身有 error_code 但文本没匹配到，也记录一下
-            solution = ticket.solution_text or ""
-            # 如果工单没有 solution_text，用错误码表里的 solution 兜底
-            if not solution and ticket.error_code:
-                ec = lookup_error_code(ticket.error_code)
-                if ec:
-                    solution = ec["solution"]
-
-            tickets.append(
-                RetrieveTicket(
-                    ticket_id=ticket.ticket_id,
-                    solution_text=solution,
-                    score=round(score, 4),
-                )
+    search_results = VectorRetriever.search_documents(req.query, top_k=req.top_k)
+    chunks = []
+    for doc_id, chunk_index, score in search_results:
+        doc = db.query(Document).filter(Document.id == doc_id).first()
+        chunk = (
+            db.query(DocumentChunk)
+            .filter(
+                DocumentChunk.document_id == doc_id,
+                DocumentChunk.chunk_index == chunk_index,
             )
+            .first()
+        )
+        if not doc or not chunk:
+            continue
+        chunks.append(
+            RetrieveChunk(
+                document_id=doc_id,
+                title=doc.title or "",
+                chunk_index=chunk_index,
+                content=chunk.content or "",
+                score=round(float(score), 4),
+            )
+        )
+        log.info(
+            f"[retrieve] hit doc={doc_id} chunk={chunk_index} score={score:.4f} title={doc.title}"
+        )
 
     return RetrieveResponse(
         error_code=error_code,
-        tickets=tickets,
+        chunks=chunks,
     )
 
 

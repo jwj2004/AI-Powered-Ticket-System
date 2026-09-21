@@ -24,11 +24,11 @@ class Settings(BaseSettings):
     # A 的检索 / 错误码直查；USE_MOCK_RETRIEVE=true 时不真正发 HTTP
     retrieve_base_url: str = "http://127.0.0.1:8000"
     retrieve_timeout_seconds: float = 10.0
-    use_mock_retrieve: bool = True
+    use_mock_retrieve: bool = False
 
     # 文档块相似度阈值：低于 medium 视为证据不足
-    high_score_threshold: float = 0.75
-    medium_score_threshold: float = 0.45
+    high_score_threshold: float = 0.55
+    medium_score_threshold: float = 0.35
 
     # 检索增强：候选池 → BM25+向量融合 → cross-encoder 重排
     retrieve_candidate_k: int = 10
