@@ -33,7 +33,11 @@ def get_db():
 def init_db():
     """初始化数据库：建表（D1 MVP 用，正式环境走 alembic）"""
     # 先导入所有 model，确保 Base 知道它们
-    from app.models import error_code, customer_asset, ticket, query_log, vector_index_meta  # noqa: F401
+    from app.models import (  # noqa: F401
+        error_code, customer_asset, ticket, query_log, vector_index_meta,
+        user, doc_space, document, document_chunk, conversation, message,
+        feedback, knowledge_gap, notification, doc_version, operation_log,
+    )
     log.info("正在创建数据库表...")
     Base.metadata.create_all(bind=engine)
     log.success("数据库表创建完成")

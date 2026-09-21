@@ -12,8 +12,6 @@ from app.schemas import (
     RetrieveRequest,
     RetrieveResponse,
     RetrieveTicket,
-    FeedbackRequest,
-    FeedbackResponse,
 )
 from app.services import (
     lookup_error_code,
@@ -97,15 +95,6 @@ def api_retrieve(req: RetrieveRequest, db: Session = Depends(get_db)):
 
 # ============================================================
 # 三、反馈埋点 POST /api/feedback
+# 已移至 app/api/chat.py，统一使用 message_id 字段（接口契约对齐）
+# 此处保留 update_feedback 服务函数供 B 模块内部调用
 # ============================================================
-@router.post("/feedback", response_model=FeedbackResponse)
-def api_feedback(req: FeedbackRequest, db: Session = Depends(get_db)):
-    """
-    反馈埋点上报
-
-    - copied: 是否复制了草稿
-    - thumbs_down: 是否点了踩
-    """
-    log.info(f"[feedback] query_id={req.query_id}, copied={req.copied}, thumbs_down={req.thumbs_down}")
-    ok = update_feedback(req.query_id, req.copied, req.thumbs_down)
-    return FeedbackResponse(ok=ok)
