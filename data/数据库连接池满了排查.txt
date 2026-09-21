@@ -1,0 +1,64 @@
+数据库连接池满了的排查与处理
+
+一、查看当前连接数
+
+MySQL:
+  SHOW STATUS LIKE 'Threads_connected';
+  SHOW PROCESSLIST;
+PostgreSQL:
+  SELECT count(*) FROM pg_stat_activity;
+  SELECT state, count(*) FROM pg_stat_activity GROUP BY 1;
+  SELECT pid, state, wait_event, query FROM pg_stat_activity ORDER BY state;
+SQL Server:
+  SELECT COUNT(*) FROM sys.dm_exec_connections;
+
+二、查看最大连接数配置
+
+MySQL: SHOW VARIABLES LIKE 'max_connections';
+PostgreSQL: SHOW max_connections;
+SQL Server: 通过sp_configure 'user connections'查看
+
+三、分析连接来源
+
+使用SHOW PROCESSLIST(MySQL)或pg_stat_activity(PostgreSQL)查看哪些应用/用户占用了连接。检查是否有长时间运行的查询或未关闭的连接。
+
+四、常见原因
+
+1. 应用程序未正确关闭数据库连接（连接泄漏）
+2. 连接池配置过大或泄漏
+3. 长时间运行的事务或查询阻塞了连接释放
+4. 突发流量导致连接数激增
+5. 数据库最大连接数配置过低
+
+五、解决方案
+
+临时解决方案：
+- 终止空闲或长时间运行的连接
+  MySQL: KILL [process_id]
+  PostgreSQL: SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE state='idle' AND query_start < now() - interval '30 minutes';
+- 增加最大连接数（动态调整，无需重启）
+  MySQL: SET GLOBAL max_connections = 500;
+  PostgreSQL: ALTER SYSTEM SET max_connections = 500;（需要重启）
+
+长期解决方案：
+- 修复应用程序中的连接泄漏问题，确保所有连接在使用后正确关闭
+- 优化查询性能，减少连接占用时间
+- 合理配置连接池大小（如HikariCP的maximumPoolSize）
+- 考虑使用读写分离或分库分表分散连接压力
+- 使用数据库代理（如ProxySQL、PgBouncer）管理连接池
+
+六、连接泄漏检测方法
+
+1. 在应用日志中搜索连接获取和释放的记录，检查是否有获取后未释放的情况
+2. 使用数据库性能监控工具（如Performance Schema）跟踪连接
+3. MySQL性能模式查询：
+   SELECT * FROM performance_schema.threads WHERE TYPE='FOREGROUND';
+4. 检查应用的连接池配置，确保设置了合理的idle timeout和max lifetime
+
+七、预防措施
+
+1. 设置连接池的idle timeout，自动回收空闲连接
+2. 设置连接的max lifetime，避免长期持有连接
+3. 配置连接数监控告警，当连接数达到阈值时通知
+4. 定期审计应用的数据库连接使用情况
+5. 使用try-finally或using语句确保连接归还连接池

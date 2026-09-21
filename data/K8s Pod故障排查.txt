@@ -1,0 +1,90 @@
+Kubernetes Pod故障排查指南
+
+一、CrashLoopBackOff
+
+CrashLoopBackOff表示Pod中的容器反复崩溃重启。常见原因：
+
+1. 应用程序错误导致的容器退出
+2. 配置错误，如环境变量不正确或配置文件丢失
+3. 资源限制，容器可能没有足够的内存或CPU正常启动
+4. 健康检查失败，应用程序没有在预期时间内启动服务
+5. 容器的存活探针或启动探针返回失败
+
+排查步骤：
+1. 查看容器日志：kubectl logs <pod-name>
+2. 查看Pod事件：kubectl describe pod <pod-name>
+3. 检查容器配置：环境变量、配置文件、资源限制
+4. 检查探针配置：存活探针、就绪探针的配置是否正确
+5. 查看退出码：kubectl describe pod <pod-name>中的Containers部分
+
+常见退出码：
+- 退出码1：应用程序错误
+- 退出码137：OOMKilled，容器内存不足被系统杀死
+- 退出码139：段错误
+- 退出码143：收到SIGTERM信号正常退出
+
+二、OOMKilled
+
+当容器使用的内存超过了资源限制时，系统会发送SIGKILL信号终止容器。
+
+排查方法：
+1. 查看Pod事件：kubectl describe pod <pod-name>，查找"OOMKilled"或"Last State"
+2. 检查容器内存限制：kubectl get pod <pod-name> -o jsonpath='{.spec.containers[*].resources}'
+3. 查看应用内存使用日志
+
+解决方案：
+- 如果应用确实需要更多内存，调高resources.limits.memory
+- 如果应用有内存泄漏，修复泄漏而不是无限调高内存限制
+- 对于JVM应用，确保堆内存配置留有余量给非堆内存使用
+- 如果节点本身内存不足，驱逐其他Pod或增加节点
+
+三、Pod处于Pending状态
+
+Pending状态表示Pod尚未被调度到节点上。常见原因：
+
+1. 资源不足：没有节点有足够的CPU/内存满足Pod的资源请求
+2. 节点选择器不匹配：nodeSelector或nodeAffinity没有匹配的节点
+3. 污点和容忍：节点有污点但Pod没有相应的容忍
+4. 持久卷未绑定：Pod引用的PVC没有可用的PV
+
+排查步骤：
+1. kubectl describe pod <pod-name>查看Events部分
+2. 检查节点资源：kubectl top nodes
+3. 检查节点标签：kubectl get nodes --show-labels
+4. 检查污点：kubectl describe node <node-name>
+
+四、Pod处于ImagePullBackOff
+
+ImagePullBackOff表示Kubernetes无法拉取容器镜像。常见原因：
+
+1. 镜像名称拼写错误
+2. 镜像不存在于指定仓库
+3. 没有配置正确的镜像仓库认证凭证
+4. 镜像仓库网络不可达
+
+排查步骤：
+1. kubectl describe pod <pod-name>查看Events部分的错误信息
+2. 确认镜像名称和标签是否正确
+3. 如果是私有仓库，检查imagePullSecrets是否配置正确
+4. 在节点上手动测试拉取镜像：crictl pull <image-name>
+
+五、Pod无法访问服务
+
+排查步骤：
+1. 检查Service是否存在：kubectl get svc
+2. 检查Service的selector是否匹配Pod的label
+3. 检查Service的端口配置是否正确
+4. 检查网络策略是否阻止了流量
+5. 使用kubectl exec进入Pod测试网络连通性
+6. 检查CoreDNS是否正常运行：kubectl get pods -n kube-system | grep coredns
+
+六、常用排查命令汇总
+
+- 查看Pod状态：kubectl get pods
+- 查看Pod详情：kubectl describe pod <pod-name>
+- 查看容器日志：kubectl logs <pod-name>
+- 查看上一个容器日志：kubectl logs <pod-name> --previous
+- 进入容器：kubectl exec -it <pod-name> -- /bin/sh
+- 查看节点资源：kubectl top nodes
+- 查看Pod资源：kubectl top pods
+- 查看事件：kubectl get events --sort-by='.lastTimestamp'
