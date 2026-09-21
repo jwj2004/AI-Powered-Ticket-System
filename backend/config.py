@@ -23,7 +23,7 @@ class Settings(BaseSettings):
 
     # A 的检索 / 错误码直查；USE_MOCK_RETRIEVE=true 时不真正发 HTTP
     retrieve_base_url: str = "http://127.0.0.1:8000"
-    retrieve_timeout_seconds: float = 10.0
+    retrieve_timeout_seconds: float = 30.0
     use_mock_retrieve: bool = False
 
     # 文档块相似度阈值：低于 medium 视为证据不足

@@ -1,6 +1,6 @@
-"""临时脚本：把已审批文档的切块重新写入文档 FAISS 索引。
+"""按当前切块逻辑重写已审批文档的 document_chunk，并重建文档 FAISS 索引。
 
-不改后端逻辑，只调用现有的 VectorRetriever.add_document_chunks。
+FAQ 文档走 split_document（单条 Q&A），普通文档仍是 500 字重叠 50。
 用法：python scripts/rebuild_doc_index.py
 """
 import os
@@ -13,11 +13,15 @@ import faiss
 from app.core.database import SessionLocal
 from app.models.document import Document
 from app.models.document_chunk import DocumentChunk
+from app.services.document_service import ensure_chunk_type_column, split_document
 from app.services.vector_retriever import VectorRetriever
 
 
 def main() -> None:
+    ensure_chunk_type_column()
     db = SessionLocal()
+    texts: list[str] = []
+    chunk_ids: list[int] = []
     try:
         docs = (
             db.query(Document)
@@ -25,19 +29,22 @@ def main() -> None:
             .order_by(Document.id)
             .all()
         )
-        texts: list[str] = []
-        chunk_ids: list[int] = []
         for doc in docs:
-            rows = (
-                db.query(DocumentChunk)
-                .filter(DocumentChunk.document_id == doc.id)
-                .order_by(DocumentChunk.chunk_index)
-                .all()
-            )
-            print(f"doc {doc.id} approved={doc.approved} chunks={len(rows)} title={doc.title}")
-            for row in rows:
-                texts.append(row.content)
+            db.query(DocumentChunk).filter(DocumentChunk.document_id == doc.id).delete()
+            parts = split_document(doc.content or "", doc.title)
+            print(f"doc {doc.id} approved={doc.approved} chunks={len(parts)} title={doc.title}")
+            for index, (chunk_text, chunk_type) in enumerate(parts):
+                row = DocumentChunk(
+                    document_id=doc.id,
+                    chunk_index=index,
+                    content=chunk_text,
+                    chunk_type=chunk_type,
+                )
+                db.add(row)
+                db.flush()
+                texts.append(chunk_text)
                 chunk_ids.append(row.id)
+        db.commit()
     finally:
         db.close()
 

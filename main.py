@@ -68,6 +68,12 @@ def health():
 async def startup_event():
     log.success(f"{settings.app_name} 启动成功")
     log.info(f"API 文档: http://127.0.0.1:8000/docs")
+    from app.services.document_service import ensure_chunk_type_column
+    from app.services.vector_retriever import VectorRetriever
+
+    ensure_chunk_type_column()
+    VectorRetriever.ensure_init()
+    log.success("向量模型加载完成")
 
 
 if __name__ == "__main__":
