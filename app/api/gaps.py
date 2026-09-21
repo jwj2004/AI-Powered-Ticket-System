@@ -35,6 +35,8 @@ def list_gaps(
             "user_id": g.user_id,
             "username": u.username,
             "status": g.status,
+            "answer": g.answer,
+            "resolved_at": g.resolved_at.isoformat() if g.resolved_at else None,
             "created_at": g.created_at.isoformat() if g.created_at else "",
         }
         for g, u in rows

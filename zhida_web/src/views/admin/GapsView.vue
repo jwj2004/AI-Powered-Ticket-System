@@ -7,45 +7,78 @@
       </div>
     </div>
 
+    <div class="tabs">
+      <button
+        type="button"
+        class="tab"
+        :class="{ active: tab === 'pending' }"
+        @click="tab = 'pending'"
+      >
+        待处理 ({{ pendingCount }})
+      </button>
+      <button
+        type="button"
+        class="tab"
+        :class="{ active: tab === 'resolved' }"
+        @click="tab = 'resolved'"
+      >
+        已解决 ({{ resolvedCount }})
+      </button>
+    </div>
+
     <p v-if="error" class="error">{{ error }}</p>
     <p v-if="okMsg" class="ok">{{ okMsg }}</p>
 
     <div class="table-wrap">
       <table>
         <thead>
-          <tr>
+          <tr v-if="tab === 'pending'">
             <th>问题</th>
             <th>提问人</th>
             <th>时间</th>
             <th>状态</th>
             <th>操作</th>
           </tr>
+          <tr v-else>
+            <th>问题</th>
+            <th>提问人</th>
+            <th>回答内容</th>
+            <th>解决时间</th>
+          </tr>
         </thead>
         <tbody>
-          <tr v-if="!gaps.length">
-            <td colspan="5" class="empty">暂无缺口</td>
+          <tr v-if="!visibleGaps.length">
+            <td :colspan="tab === 'pending' ? 5 : 4" class="empty">
+              {{ tab === 'pending' ? '暂无待处理缺口' : '暂无已解决缺口' }}
+            </td>
           </tr>
-          <tr v-for="g in gaps" :key="g.gap_id">
-            <td>{{ g.question }}</td>
-            <td>{{ g.username }}</td>
-            <td>{{ formatTime(g.created_at) }}</td>
-            <td>
-              <span class="status" :class="g.status">{{ g.status }}</span>
-            </td>
-            <td class="ops">
-              <button
-                v-if="g.status === 'pending'"
-                type="button"
-                class="action-btn"
-                title="处理"
-                @click="openResolve(g)"
-              >
-                <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12l5 5L20 7" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
-                处理
-              </button>
-              <button type="button" class="action-btn" @click="openMerge(g)">合并</button>
-              <span v-if="g.status !== 'pending'" class="muted">已处理</span>
-            </td>
+          <tr v-for="g in visibleGaps" :key="g.gap_id">
+            <template v-if="tab === 'pending'">
+              <td>{{ g.question }}</td>
+              <td>{{ g.username }}</td>
+              <td>{{ formatTime(g.created_at) }}</td>
+              <td>
+                <span class="status" :class="g.status">{{ g.status }}</span>
+              </td>
+              <td class="ops">
+                <button
+                  type="button"
+                  class="action-btn"
+                  title="处理"
+                  @click="openResolve(g)"
+                >
+                  <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12l5 5L20 7" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                  处理
+                </button>
+                <button type="button" class="action-btn" @click="openMerge(g)">合并</button>
+              </td>
+            </template>
+            <template v-else>
+              <td>{{ g.question }}</td>
+              <td>{{ g.username }}</td>
+              <td class="answer-cell">{{ g.answer || '—' }}</td>
+              <td>{{ formatTime(g.resolved_at || g.created_at) }}</td>
+            </template>
           </tr>
         </tbody>
       </table>
@@ -107,6 +140,7 @@ import { computed, onMounted, reactive, ref } from 'vue'
 import { listGaps, resolveGap, mergeGaps } from '../../api/gaps'
 import { listDocuments } from '../../api/documents'
 
+const tab = ref('pending')
 const gaps = ref([])
 const docs = ref([])
 const error = ref('')
@@ -127,6 +161,18 @@ const mergeError = ref('')
 const mergeSource = ref(null)
 const mergeTargetId = ref(null)
 
+const pendingCount = computed(
+  () => gaps.value.filter((g) => g.status === 'pending').length,
+)
+const resolvedCount = computed(
+  () => gaps.value.filter((g) => g.status === 'resolved').length,
+)
+const visibleGaps = computed(() =>
+  gaps.value.filter((g) =>
+    tab.value === 'pending' ? g.status === 'pending' : g.status === 'resolved',
+  ),
+)
+
 function formatTime(iso) {
   if (!iso) return ''
   return String(iso).replace('T', ' ').slice(0, 16)
@@ -134,6 +180,7 @@ function formatTime(iso) {
 
 async function refresh() {
   try {
+    // 后端支持 ?status=，这里拉全量以便两个 tab 都有准确数量
     gaps.value = await listGaps()
   } catch (e) {
     error.value = e.detail || e.message || '加载缺口失败'
@@ -165,7 +212,9 @@ function openMerge(g) {
 }
 
 const mergeOptions = computed(() =>
-  gaps.value.filter((g) => g.gap_id !== mergeSource.value?.gap_id),
+  gaps.value.filter(
+    (g) => g.status === 'pending' && g.gap_id !== mergeSource.value?.gap_id,
+  ),
 )
 
 async function submitMerge() {
@@ -201,6 +250,7 @@ async function submitResolve() {
     })
     showModal.value = false
     okMsg.value = '已标记为 resolved'
+    tab.value = 'resolved'
     await refresh()
   } catch (e) {
     modalError.value = e.detail || e.message || '处理失败'
@@ -221,6 +271,29 @@ async function submitResolve() {
 .toolbar { margin-bottom: 16px; }
 h2 { margin: 0 0 4px; font-size: 18px; }
 .muted { color: var(--color-text-secondary); margin: 0; font-size: 13px; }
+.tabs {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 14px;
+  border-bottom: 1px solid var(--color-border);
+}
+.tab {
+  border: none;
+  background: transparent;
+  color: #64748b;
+  padding: 10px 14px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+}
+.tab.active {
+  color: var(--color-primary);
+  border-bottom-color: var(--color-primary);
+  font-weight: 600;
+}
+.tab:hover { color: var(--color-primary); }
 .table-wrap { overflow: auto; }
 table {
   width: 100%;
@@ -231,10 +304,18 @@ th, td {
   border-bottom: 1px solid var(--color-border);
   padding: 12px 10px;
   text-align: left;
+  vertical-align: top;
 }
 th { color: #64748b; font-weight: 600; background: #f8fafc; }
+tbody tr:nth-child(even) { background: #f8fafc; }
 tbody tr:hover { background: #eff6ff; }
 .empty { text-align: center; color: #999; }
+.answer-cell {
+  max-width: 360px;
+  white-space: pre-wrap;
+  word-break: break-word;
+  color: #334155;
+}
 .status {
   display: inline-block;
   padding: 2px 8px;
@@ -258,6 +339,7 @@ tbody tr:hover { background: #eff6ff; }
 }
 .action-btn:hover { background: var(--color-primary-soft); border-color: var(--color-primary-muted); }
 .ops { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.ico { width: 14px; height: 14px; }
 .link-btn {
   border: none;
   background: transparent;

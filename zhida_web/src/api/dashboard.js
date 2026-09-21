@@ -75,3 +75,23 @@ export async function getDashboard() {
     chart_trend_title,
   }
 }
+
+/** GET /api/dashboard/faq-candidates → 待确认高频问题 */
+export async function listFaqCandidates() {
+  if (USE_MOCK) {
+    return (MOCK_DASHBOARD.top_questions || []).map((t) => ({
+      question: t.question,
+      count: t.count ?? 0,
+      has_gap: false,
+    }))
+  }
+  const data = await request('/api/dashboard/faq-candidates')
+  return Array.isArray(data)
+    ? data.map((t) => ({
+        question: t.question || '',
+        count: t.count ?? 0,
+        has_gap: !!t.has_gap,
+        id: t.id ?? t.faq_id ?? null,
+      }))
+    : []
+}

@@ -13,12 +13,15 @@
 
     <div v-else-if="!pending.length" class="empty">暂无待确认的高频问题</div>
 
-    <div v-for="item in pending" :key="item.question" class="row-card">
+    <div v-for="item in pending" :key="itemKey(item)" class="row-card">
       <div class="main">
         <div class="q">{{ item.question }}</div>
         <div class="meta">提问次数 · {{ item.count }}</div>
       </div>
-      <button type="button" class="btn" @click="openPublish(item)">发布为 FAQ</button>
+      <div class="row-ops">
+        <button type="button" class="btn" @click="openPublish(item)">发布为 FAQ</button>
+        <button type="button" class="btn-secondary danger" @click="onDelete(item)">删除</button>
+      </div>
     </div>
 
     <div v-if="showModal" class="modal-mask" @click.self="showModal = false">
@@ -47,15 +50,15 @@
 
 <script setup>
 import { computed, onMounted, reactive, ref } from 'vue'
-import { getDashboard } from '../../api/dashboard'
-import { listFaq, publishFaq } from '../../api/faq'
+import { getDashboard, listFaqCandidates } from '../../api/dashboard'
+import { listFaq, publishFaq, deleteFaq } from '../../api/faq'
 
 const loading = ref(false)
 const error = ref('')
 const okMsg = ref('')
 const topQuestions = ref([])
 const existingFaq = ref([])
-/** 本页已发布、从待确认列表移除（key = question） */
+/** 本页已发布 / 已删除、从待确认列表移除（key = question） */
 const dismissed = ref(new Set())
 
 const showModal = ref(false)
@@ -87,18 +90,38 @@ function normalizeQ(q) {
     .toLowerCase()
 }
 
+function itemKey(item) {
+  return item.id != null ? `id-${item.id}` : normalizeQ(item.question)
+}
+
+function dismiss(key) {
+  const next = new Set(dismissed.value)
+  next.add(key)
+  dismissed.value = next
+}
+
 async function refresh() {
   loading.value = true
   error.value = ''
   try {
-    const [dash, faq] = await Promise.all([getDashboard(), listFaq()])
-    topQuestions.value = Array.isArray(dash?.top_questions)
-      ? dash.top_questions.map((t) => ({
-          question: t.question,
-          count: t.count ?? 0,
-        }))
-      : []
-    existingFaq.value = Array.isArray(faq) ? faq : []
+    let candidates = []
+    try {
+      candidates = await listFaqCandidates()
+    } catch (_) {
+      candidates = []
+    }
+    if (!candidates.length) {
+      const dash = await getDashboard()
+      candidates = Array.isArray(dash?.top_questions)
+        ? dash.top_questions.map((t) => ({
+            question: t.question,
+            count: t.count ?? 0,
+            id: null,
+          }))
+        : []
+    }
+    topQuestions.value = candidates
+    existingFaq.value = await listFaq()
   } catch (e) {
     error.value = e.detail || e.message || '加载失败'
   } finally {
@@ -116,6 +139,33 @@ function openPublish(item) {
   showModal.value = true
 }
 
+async function onDelete(item) {
+  if (!window.confirm('确认删除这条待确认 FAQ？')) return
+  okMsg.value = ''
+  error.value = ''
+  const key = normalizeQ(item.question)
+  try {
+    let faqId = item.id != null ? Number(item.id) : null
+    if (faqId == null) {
+      const matched = existingFaq.value.find(
+        (f) => normalizeQ(f.question) === key,
+      )
+      if (matched) faqId = Number(matched.id)
+    }
+    if (faqId != null && !Number.isNaN(faqId)) {
+      await deleteFaq(faqId)
+      existingFaq.value = existingFaq.value.filter((f) => Number(f.id) !== faqId)
+    }
+    dismiss(key)
+    topQuestions.value = topQuestions.value.filter(
+      (t) => normalizeQ(t.question) !== key,
+    )
+    okMsg.value = '已删除'
+  } catch (e) {
+    error.value = e.detail || e.message || '删除失败'
+  }
+}
+
 async function submitPublish() {
   modalError.value = ''
   if (!form.question.trim() || !form.answer.trim()) {
@@ -129,9 +179,7 @@ async function submitPublish() {
       answer: form.answer.trim(),
       gap_id: null,
     })
-    const next = new Set(dismissed.value)
-    next.add(form.sourceKey || normalizeQ(form.question))
-    dismissed.value = next
+    dismiss(form.sourceKey || normalizeQ(form.question))
     existingFaq.value = [
       { id: Date.now(), question: form.question.trim(), answer: form.answer.trim() },
       ...existingFaq.value,
@@ -176,6 +224,12 @@ h2 { margin: 0 0 4px; font-size: 18px; }
 .row-card:hover { background: #f8fafc; }
 .q { font-weight: 600; font-size: 14px; }
 .meta { margin-top: 4px; font-size: 12px; color: #94a3b8; }
+.row-ops {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
 .btn {
   border: none;
   background: var(--gradient);
@@ -184,10 +238,20 @@ h2 { margin: 0 0 4px; font-size: 18px; }
   padding: 8px 14px;
   font-weight: 600;
   cursor: pointer;
-  flex-shrink: 0;
 }
 .btn:hover:not(:disabled) { filter: brightness(1.06); }
 .btn:disabled { background: #93c5fd; cursor: not-allowed; }
+.btn-secondary {
+  border: 1px solid var(--color-border);
+  background: #fff;
+  color: var(--color-text);
+  border-radius: var(--radius-sm);
+  padding: 8px 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.btn-secondary.danger { color: var(--color-danger); border-color: #fecaca; }
+.btn-secondary.danger:hover { background: #fef2f2; }
 .error { color: var(--color-danger); }
 .ok { color: var(--color-success); }
 

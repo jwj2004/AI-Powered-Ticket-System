@@ -6,12 +6,15 @@ function hideMerged(list) {
   return list.filter((g) => !MOCK_MERGED_GAP_IDS.has(Number(g.gap_id)))
 }
 
-/** GET /api/gaps → 真后端为 { total, items }，对外统一返回数组 */
-export async function listGaps() {
+/** GET /api/gaps → 真后端为数组或 { total, items }，对外统一返回数组 */
+export async function listGaps(status) {
   if (USE_MOCK) {
-    return hideMerged(MOCK_GAPS.map((g) => ({ ...g })))
+    let list = hideMerged(MOCK_GAPS.map((g) => ({ ...g })))
+    if (status) list = list.filter((g) => g.status === status)
+    return list
   }
-  const data = await request('/api/gaps')
+  const qs = status ? `?status=${encodeURIComponent(status)}` : ''
+  const data = await request(`/api/gaps${qs}`)
   const items = Array.isArray(data) ? data : data?.items || []
   // 后端字段是 id，前端页面用 gap_id
   return hideMerged(items.map((g) => ({
