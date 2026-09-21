@@ -1,1 +1,1 @@
-"""draft 包：草稿生成流水线。"""
+"""draft 包已停用：完整版请使用 backend.agent。"""

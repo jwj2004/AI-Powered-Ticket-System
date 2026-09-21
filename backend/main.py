@@ -1,14 +1,18 @@
-"""FastAPI 入口：挂载 B 模块 /api/draft，并开好 CORS。"""
+"""知答 · B 模块 FastAPI 入口：生成与编排（LangGraph + /api/chat）。"""
 
 from __future__ import annotations
 
 import logging
 
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from backend.config import get_settings
-from backend.draft.router import router as draft_router
+from backend.routers import router as b_router
+from app.api.chat import router as chat_router
+from backend import store
 
 logging.basicConfig(
     level=logging.INFO,
@@ -17,10 +21,18 @@ logging.basicConfig(
 
 settings = get_settings()
 
+
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
+    store.init_db()
+    yield
+
+
 app = FastAPI(
-    title="知答 · 草稿生成后端（B 模块）",
-    version="0.1.0",
-    description="POST /api/draft — 证据不足时宁可不答，绝不硬编。",
+    title="知答 · 生成与编排（B 模块）",
+    version="0.3.0",
+    description="企业知识库问答 Agent：POST /api/chat 支持 JSON 与 SSE 流式。",
+    lifespan=lifespan,
 )
 
 app.add_middleware(
@@ -31,9 +43,10 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-app.include_router(draft_router)
+app.include_router(chat_router)
+app.include_router(b_router)
 
 
-@app.get("/health")
+@app.get("/api/health")
 def health() -> dict[str, str]:
-    return {"status": "ok"}
+    return {"status": "ok", "service": "zhida-b", "version": "0.3"}
