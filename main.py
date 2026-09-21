@@ -21,8 +21,6 @@ from app.api import (
     notifications,
     dashboard,
     faq,
-    logs,
-    stats,
 )
 
 app = FastAPI(
@@ -50,13 +48,11 @@ app.include_router(notifications.router)
 app.include_router(dashboard.router)
 app.include_router(faq.router)
 app.include_router(lookup_retrieve.router)
-app.include_router(logs.router)
-app.include_router(stats.router)
 
 
 @app.get("/api/health")
 def health():
-    return {"status": "ok", "service": "zhida", "version": "0.3.0"}
+    return {"status": "ok", "service": "zhida", "version": "0.2.0"}
 
 
 @app.on_event("startup")

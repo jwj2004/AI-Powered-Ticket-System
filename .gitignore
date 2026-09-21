@@ -37,6 +37,7 @@ logs/
 # OS
 .DS_Store
 Thumbs.db
+*.Zone.Identifier
 
 # pytest
 .pytest_cache/
