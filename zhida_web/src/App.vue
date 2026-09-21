@@ -85,7 +85,7 @@
       <div class="label">答复草稿</div>
       <div class="draft">{{ result.draft }}</div>
       <div class="actions">
-        <button @click="copyDraft" class="copy">{{ copied ? '已复制 ✓' : '复制草稿' }}</button>
+        <button @click="copyDraft" class="copy">{{ copied ? '已复制' : '复制草稿' }}</button>
         <button
           @click="thumbsDown"
           :disabled="thumbsDowned"

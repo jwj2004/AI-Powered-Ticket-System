@@ -169,15 +169,13 @@ h1 {
   padding: 12px;
   border: none;
   border-radius: var(--radius);
-  background: var(--color-primary);
+  background: var(--gradient);
   color: #fff;
   font-weight: 600;
   cursor: pointer;
   box-shadow: 0 4px 12px rgba(37, 99, 235, 0.25);
 }
-.btn:hover:not(:disabled) {
-  background: var(--color-primary-hover);
-}
+.btn:hover:not(:disabled) { filter: brightness(1.06); }
 .btn:disabled {
   background: var(--color-primary-muted);
   cursor: not-allowed;

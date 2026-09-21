@@ -2,7 +2,9 @@
   <div ref="rootEl" class="user-menu">
     <button type="button" class="trigger" @click="toggle">
       <span class="name">{{ username }}</span>
-      <span class="caret" aria-hidden="true">▾</span>
+      <span class="caret" aria-hidden="true">
+        <svg class="ico" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" /></svg>
+      </span>
     </button>
     <div v-if="open" class="menu">
       <button type="button" class="item" @click="openPwd">修改密码</button>
@@ -155,7 +157,8 @@ onBeforeUnmount(() => document.removeEventListener('click', onDocClick))
 .modal-mask {
   position: fixed;
   inset: 0;
-  background: rgba(15, 23, 42, 0.4);
+  background: rgba(15, 23, 42, 0.35);
+  backdrop-filter: blur(8px);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -197,7 +200,7 @@ onBeforeUnmount(() => document.removeEventListener('click', onDocClick))
 }
 .btn {
   border: none;
-  background: var(--color-primary);
+  background: var(--gradient);
   color: #fff;
   border-radius: var(--radius-sm);
   padding: 9px 16px;

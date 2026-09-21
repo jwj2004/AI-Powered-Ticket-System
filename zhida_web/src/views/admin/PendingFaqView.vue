@@ -178,7 +178,7 @@ h2 { margin: 0 0 4px; font-size: 18px; }
 .meta { margin-top: 4px; font-size: 12px; color: #94a3b8; }
 .btn {
   border: none;
-  background: var(--color-primary);
+  background: var(--gradient);
   color: #fff;
   border-radius: var(--radius-sm);
   padding: 8px 14px;
@@ -186,7 +186,7 @@ h2 { margin: 0 0 4px; font-size: 18px; }
   cursor: pointer;
   flex-shrink: 0;
 }
-.btn:hover:not(:disabled) { background: var(--color-primary-hover); }
+.btn:hover:not(:disabled) { filter: brightness(1.06); }
 .btn:disabled { background: #93c5fd; cursor: not-allowed; }
 .error { color: var(--color-danger); }
 .ok { color: var(--color-success); }
@@ -194,7 +194,8 @@ h2 { margin: 0 0 4px; font-size: 18px; }
 .modal-mask {
   position: fixed;
   inset: 0;
-  background: rgba(15, 23, 42, 0.4);
+  background: rgba(15, 23, 42, 0.35);
+  backdrop-filter: blur(8px);
   display: flex;
   align-items: center;
   justify-content: center;

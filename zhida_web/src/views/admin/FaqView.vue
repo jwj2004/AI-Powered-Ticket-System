@@ -193,14 +193,14 @@ h2 { margin: 0 0 4px; font-size: 18px; }
 .muted { color: var(--color-text-secondary); margin: 0; font-size: 13px; }
 .btn {
   border: none;
-  background: var(--color-primary);
+  background: var(--gradient);
   color: #fff;
   border-radius: var(--radius-sm);
   padding: 9px 16px;
   font-weight: 600;
   cursor: pointer;
 }
-.btn:hover:not(:disabled) { background: var(--color-primary-hover); }
+.btn:hover:not(:disabled) { filter: brightness(1.06); }
 .btn:disabled { background: #93c5fd; cursor: not-allowed; }
 .empty { color: #999; text-align: center; padding: 24px 0; }
 .card {
@@ -238,7 +238,8 @@ h2 { margin: 0 0 4px; font-size: 18px; }
 .modal-mask {
   position: fixed;
   inset: 0;
-  background: rgba(15, 23, 42, 0.4);
+  background: rgba(15, 23, 42, 0.35);
+  backdrop-filter: blur(8px);
   display: flex;
   align-items: center;
   justify-content: center;

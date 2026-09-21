@@ -26,7 +26,11 @@
       <div class="topbar">
         <UserMenu />
       </div>
-      <RouterView />
+      <RouterView v-slot="{ Component }">
+        <Transition name="page" mode="out-in">
+          <component :is="Component" />
+        </Transition>
+      </RouterView>
     </main>
   </div>
 </template>
@@ -51,7 +55,7 @@ function onLogout() {
 .admin {
   display: flex;
   min-height: 100vh;
-  background: var(--color-bg);
+  background: var(--bg-gradient);
 }
 .nav {
   width: 228px;
@@ -80,22 +84,23 @@ nav {
   flex: 1;
 }
 nav a {
-  color: #cbd5e1;
+  color: #e2e8f0;
   text-decoration: none;
   padding: 10px 12px;
   border-radius: var(--radius-sm);
   font-size: 14px;
-  transition: background 0.15s, color 0.15s;
+  font-weight: 400;
+  transition: background 0.2s ease, color 0.2s ease, box-shadow 0.2s ease;
 }
 nav a:hover {
-  background: rgba(255, 255, 255, 0.06);
+  background: rgba(255, 255, 255, 0.08);
   color: #fff;
 }
 nav a.router-link-active {
-  background: var(--color-primary);
+  background: var(--gradient);
   color: #fff;
   font-weight: 600;
-  box-shadow: 0 4px 12px rgba(37, 99, 235, 0.35);
+  box-shadow: 0 6px 16px rgba(102, 126, 234, 0.35);
 }
 .nav-users {
   display: flex;

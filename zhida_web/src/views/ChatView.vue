@@ -8,7 +8,10 @@
       <div class="top-actions">
         <div class="bell-wrap">
           <button type="button" class="bell" title="通知" @click="toggleNotif">
-            🔔
+            <svg class="ico" viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M6 8a6 6 0 1 1 12 0c0 7 3 7 3 9H3c0-2 3-2 3-9" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" />
+              <path d="M10 20a2 2 0 0 0 4 0" fill="none" stroke="currentColor" stroke-width="1.6" />
+            </svg>
             <span v-if="unreadCount > 0" class="badge" :title="`未读 ${unreadCount}`"></span>
           </button>
           <div v-if="showNotif" class="notif-panel">
@@ -114,10 +117,12 @@
               class="conv-del"
               title="删除会话"
               aria-label="删除会话"
-              @click.stop="onDeleteConversation(c)"
-            >
-              🗑
-            </button>
+            @click.stop="onDeleteConversation(c)"
+          >
+            <svg class="ico" viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M4 7h16M9 7V5h6v2M8 7l1 13h6l1-13" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" />
+            </svg>
+          </button>
           </div>
           <p v-if="!convLoading && !conversations.length" class="muted pad">暂无历史会话</p>
           <p v-else-if="!convLoading && conversations.length && !filteredConversations.length" class="muted pad">
@@ -177,6 +182,11 @@
       <main class="main">
         <div ref="listEl" class="messages">
           <div v-if="!messages.length && !loading" class="placeholder">
+            <svg class="empty-art" viewBox="0 0 120 80" aria-hidden="true">
+              <rect x="18" y="16" width="84" height="52" rx="12" fill="none" stroke="#667eea" stroke-width="2" />
+              <path d="M36 40h48M36 50h28" stroke="#764ba2" stroke-width="2" stroke-linecap="round" />
+              <circle cx="92" cy="22" r="8" fill="#eef2ff" stroke="#667eea" stroke-width="2" />
+            </svg>
             <p>{{ emptyHint }}</p>
             <div v-if="hotQuestions.length" class="hot">
               <div class="hot-title">大家都在问</div>
@@ -223,7 +233,10 @@
                   class="cite-chip"
                   @click="openCitation(c)"
                 >
-                  <span class="cite-ico" aria-hidden="true">📄</span>
+                  <svg class="ico cite-ico" viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="M7 3h7l5 5v13a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1z" fill="none" stroke="currentColor" stroke-width="1.6" />
+                    <path d="M14 3v5h5" fill="none" stroke="currentColor" stroke-width="1.6" />
+                  </svg>
                   <span>{{ c.title }} · chunk {{ c.chunk_index }}</span>
                 </button>
               </div>
@@ -297,7 +310,9 @@
               @keydown="onKeydown"
             ></textarea>
             <button class="btn send-btn" :disabled="loading || !input.trim()" @click="onSend" title="发送">
-              ↑
+              <svg class="ico" viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M12 19V5M6 11l6-6 6 6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+              </svg>
             </button>
           </div>
           <div class="templates">
@@ -946,7 +961,7 @@ function onLogout() {
   height: 100vh;
   display: flex;
   flex-direction: column;
-  background: var(--color-bg);
+  background: var(--bg-gradient);
 }
 .top {
   flex-shrink: 0;
@@ -1039,11 +1054,12 @@ h1 { margin: 0; font-size: 18px; color: var(--color-text); }
   border-right: 1px solid var(--color-border);
 }
 .sidebar {
-  width: 240px;
+  width: 248px;
   flex-shrink: 0;
   padding: 14px 12px;
-  border-right: 1px solid var(--color-border);
-  background: #fafbfc;
+  border-right: 1px solid rgba(255, 255, 255, 0.06);
+  background: #1e293b;
+  color: #fff;
   overflow: auto;
 }
 .side-head {
@@ -1053,17 +1069,18 @@ h1 { margin: 0; font-size: 18px; color: var(--color-text); }
   gap: 8px;
   margin-bottom: 12px;
 }
-.side-title { font-weight: 600; font-size: 13px; color: #374151; }
+.side-title { font-weight: 600; font-size: 13px; color: #e2e8f0; }
 .new-chat {
   border: none;
-  background: var(--color-primary);
+  background: var(--gradient);
   color: #fff;
   border-radius: var(--radius-sm);
   padding: 5px 10px;
   font-size: 12px;
   cursor: pointer;
+  transition: filter 0.2s ease, transform 0.15s ease;
 }
-.new-chat:hover { background: var(--color-primary-hover); }
+.new-chat:hover { filter: brightness(1.08); }
 .conv-search {
   width: 100%;
   margin-bottom: 10px;
@@ -1091,10 +1108,11 @@ h1 { margin: 0; font-size: 18px; color: var(--color-text); }
   margin-bottom: 4px;
   cursor: pointer;
 }
-.conv-item:hover { background: #f3f4f6; }
+.conv-item:hover { background: rgba(255, 255, 255, 0.06); }
 .conv-item.active {
-  background: var(--color-primary-soft);
-  border-color: #bfdbfe;
+  background: var(--gradient);
+  border-color: transparent;
+  color: #fff;
 }
 .conv-main { min-width: 0; flex: 1; }
 .conv-del {
@@ -1116,12 +1134,14 @@ h1 { margin: 0; font-size: 18px; color: var(--color-text); }
 .conv-title {
   font-size: 13px;
   font-weight: 600;
+  color: #f8fafc;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.conv-time { font-size: 11px; color: #9ca3af; margin-top: 2px; }
-.muted { color: var(--color-text-secondary); font-size: 12px; }
+.conv-time { font-size: 11px; color: #94a3b8; margin-top: 2px; }
+.sidebar .muted { color: #94a3b8; font-size: 12px; }
+.muted { color: var(--color-text-secondary); font-size: 12px; font-weight: 400; }
 .main {
   flex: 1;
   display: flex;
@@ -1138,13 +1158,19 @@ h1 { margin: 0; font-size: 18px; color: var(--color-text); }
 .placeholder {
   color: #64748b;
   text-align: center;
-  margin-top: 64px;
+  margin-top: 48px;
 }
+.empty-art { width: 140px; height: 92px; margin-bottom: 8px; }
 .placeholder .muted { margin-top: 8px; }
 
 .row {
   display: flex;
   margin-bottom: 14px;
+  animation: bubble-in 0.35s ease;
+}
+@keyframes bubble-in {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
 }
 .row.user { justify-content: flex-end; }
 .row.assistant { justify-content: flex-start; }
@@ -1157,15 +1183,19 @@ h1 { margin: 0; font-size: 18px; color: var(--color-text); }
   box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
 }
 .bubble.user {
-  background: var(--color-primary);
+  background: var(--gradient);
   color: #fff;
+  border-radius: 16px;
   border-bottom-right-radius: 6px;
 }
-.bubble.user .role { color: rgba(255, 255, 255, 0.72); }
+.bubble.user .role { color: rgba(255, 255, 255, 0.8); }
 .bubble.assistant {
-  background: #f1f5f9;
+  background: #fff;
   color: var(--color-text);
+  border-radius: 16px;
   border-bottom-left-radius: 6px;
+  border-left: 4px solid #667eea;
+  box-shadow: var(--shadow);
 }
 .bubble.low {
   background: #fff7ed;
@@ -1209,29 +1239,29 @@ h1 { margin: 0; font-size: 18px; color: var(--color-text); }
 .cite-chip {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  margin: 0 6px 6px 0;
-  padding: 4px 10px;
-  border: none;
-  border-radius: var(--radius-pill);
+  gap: 6px;
+  margin: 0 8px 8px 0;
+  padding: 8px 12px;
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
   background: #fff;
-  color: var(--color-primary);
+  color: #334155;
   font-size: 12px;
   cursor: pointer;
-  box-shadow: 0 0 0 1px #bfdbfe inset;
+  box-shadow: var(--shadow);
   max-width: 100%;
 }
-.cite-ico {
-  font-size: 12px;
-  line-height: 1;
-  flex-shrink: 0;
-}
+.cite-ico { width: 16px; height: 16px; color: #667eea; }
 .cite-chip span:last-child {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.cite-chip:hover { background: var(--color-primary-soft); }
+.cite-chip:hover {
+  border-color: #667eea;
+  color: #667eea;
+  background: #eef2ff;
+}
 
 .gap-tip {
   margin-top: 8px;
@@ -1283,8 +1313,8 @@ h1 { margin: 0; font-size: 18px; color: var(--color-text); }
   gap: 10px;
   align-items: flex-end;
   background: #fff;
-  padding: 10px 12px;
-  border-radius: 20px;
+  padding: 8px 8px 8px 16px;
+  border-radius: 24px;
   border: 1px solid var(--color-border);
   box-shadow: var(--shadow);
 }
@@ -1293,38 +1323,38 @@ h1 { margin: 0; font-size: 18px; color: var(--color-text); }
   resize: none;
   min-height: 44px;
   max-height: 120px;
-  padding: 10px 14px;
-  border: 1px solid transparent;
-  border-radius: 14px;
-  background: #f8fafc;
+  padding: 10px 4px;
+  border: none;
+  border-radius: 24px;
+  background: transparent;
 }
-.input:focus {
-  outline: none;
-  border-color: var(--color-primary);
-  background: #fff;
-  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
-}
+.input:focus { outline: none; }
 .btn {
   padding: 10px 18px;
   border: none;
   border-radius: var(--radius-sm);
-  background: var(--color-primary);
+  background: var(--gradient);
   color: #fff;
   font-weight: 600;
   cursor: pointer;
 }
-.btn:hover:not(:disabled) { background: var(--color-primary-hover); }
-.btn:disabled { background: var(--color-primary-muted); cursor: not-allowed; }
+.btn:hover:not(:disabled) { filter: brightness(1.06); }
+.btn:disabled { opacity: 0.6; cursor: not-allowed; }
 .send-btn {
   width: 44px;
   height: 44px;
   padding: 0;
   border-radius: 50%;
-  font-size: 18px;
-  font-weight: 700;
-  line-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   flex-shrink: 0;
-  box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3);
+  box-shadow: 0 8px 16px rgba(102, 126, 234, 0.35);
+  transition: transform 0.15s ease, box-shadow 0.2s ease;
+}
+.send-btn:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 12px 20px rgba(102, 126, 234, 0.4);
 }
 .error {
   color: var(--color-danger);
@@ -1334,7 +1364,8 @@ h1 { margin: 0; font-size: 18px; color: var(--color-text); }
 .modal-mask {
   position: fixed;
   inset: 0;
-  background: rgba(15, 23, 42, 0.4);
+  background: rgba(15, 23, 42, 0.35);
+  backdrop-filter: blur(8px);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1376,19 +1407,20 @@ h1 { margin: 0; font-size: 18px; color: var(--color-text); }
   margin-bottom: 12px;
 }
 .side-link {
-  border: 1px solid var(--color-border);
-  background: #fff;
-  color: #374151;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: transparent;
+  color: #e2e8f0;
   border-radius: var(--radius-sm);
   padding: 4px 8px;
   font-size: 12px;
   cursor: pointer;
+  transition: background 0.2s ease, color 0.2s ease, border-color 0.2s ease;
 }
 .side-link.on,
 .side-link:hover {
-  border-color: var(--color-primary-muted);
-  color: var(--color-primary);
-  background: var(--color-primary-soft);
+  border-color: transparent;
+  color: #fff;
+  background: var(--gradient);
 }
 .side-title.block { margin-bottom: 8px; }
 .side-card {
@@ -1419,19 +1451,24 @@ h1 { margin: 0; font-size: 18px; color: var(--color-text); }
   background: #eff6ff;
   color: var(--color-primary);
 }
-.hot { margin-top: 14px; }
-.hot-title { font-weight: 600; font-size: 13px; margin-bottom: 8px; color: #374151; }
-.hot-chip {
-  display: block;
-  width: 100%;
+.hot {
+  margin-top: 18px;
   text-align: left;
-  margin: 0 0 6px;
+}
+.hot-title { font-weight: 600; font-size: 14px; margin-bottom: 10px; color: #334155; }
+.hot-chip {
+  display: inline-flex;
+  width: calc(50% - 6px);
+  text-align: left;
+  margin: 0 6px 8px 0;
   border: 1px solid var(--color-border);
   background: #fff;
-  border-radius: var(--radius-sm);
-  padding: 8px 10px;
+  border-radius: 12px;
+  padding: 12px 14px;
   cursor: pointer;
-  color: #1f2937;
+  color: #1e293b;
+  box-shadow: var(--shadow);
+  vertical-align: top;
 }
 .hot-chip:hover { border-color: var(--color-primary-muted); color: var(--color-primary); }
 .templates {

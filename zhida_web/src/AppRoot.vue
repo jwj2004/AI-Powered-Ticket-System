@@ -4,7 +4,11 @@
       <span>网络异常，请检查后端服务</span>
       <button type="button" class="net-close" aria-label="关闭" @click="dismissNetError">×</button>
     </div>
-    <RouterView />
+    <RouterView v-slot="{ Component }">
+      <Transition name="page" mode="out-in">
+        <component :is="Component" />
+      </Transition>
+    </RouterView>
   </div>
 </template>
 

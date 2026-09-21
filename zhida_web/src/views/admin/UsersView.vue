@@ -75,7 +75,8 @@
                 :disabled="busyId === u.id"
                 @click="onApprove(u)"
               >
-                ✓ 同意
+                <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12l5 5L20 7" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                同意
               </button>
               <button
                 type="button"
@@ -83,7 +84,8 @@
                 :disabled="busyId === u.id"
                 @click="onReject(u)"
               >
-                ✕ 拒绝
+                <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+                拒绝
               </button>
             </td>
           </tr>
@@ -136,7 +138,8 @@
                 :disabled="busyId === u.id"
                 @click="onMakeAdmin(u)"
               >
-                ↑ 升级为管理员
+                <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 19V5M6 11l6-6 6 6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                升级为管理员
               </button>
               <button
                 v-if="u.username !== me && u.status !== 'disabled'"

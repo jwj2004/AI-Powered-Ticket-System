@@ -11,18 +11,22 @@
 
     <div v-if="data" class="cards">
       <div class="card">
+        <svg class="card-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 6h14M5 12h14M5 18h8" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
         <div class="card-label">今日问答量</div>
         <div class="card-value">{{ data.total_today }}</div>
       </div>
       <div class="card">
+        <svg class="card-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l2.2 6.6H21l-5.4 4 2 6.4L12 16.8 6.4 20l2-6.4L3 9.6h6.8z" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/></svg>
         <div class="card-label">命中率</div>
         <div class="card-value">{{ hitRateText }}</div>
       </div>
       <div class="card">
+        <svg class="card-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 3h7l5 5v13H7a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1z" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M14 3v5h5" fill="none" stroke="currentColor" stroke-width="1.6"/></svg>
         <div class="card-label">文档总数</div>
         <div class="card-value">{{ data.doc_count }}</div>
       </div>
       <div class="card">
+        <svg class="card-ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M12 8v5M12 16.5h.01" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
         <div class="card-label">待处理缺口</div>
         <div class="card-value warn">{{ data.pending_gaps }}</div>
       </div>
@@ -89,7 +93,7 @@ function renderCharts() {
           name: '数量',
           type: 'bar',
           data: trend.map((d) => d.count),
-          itemStyle: { color: '#2563eb', borderRadius: [4, 4, 0, 0] },
+          itemStyle: { color: '#667eea', borderRadius: [4, 4, 0, 0] },
           barWidth: 28,
         },
       ],
@@ -114,7 +118,7 @@ function renderCharts() {
           name: '次数',
           type: 'bar',
           data: values,
-          itemStyle: { color: '#15803d', borderRadius: [0, 4, 4, 0] },
+          itemStyle: { color: '#764ba2', borderRadius: [0, 4, 4, 0] },
           barWidth: 16,
         },
       ],
@@ -201,12 +205,24 @@ h2 { margin: 0 0 4px; font-size: 18px; }
   margin-bottom: 16px;
 }
 .card {
+  position: relative;
+  overflow: hidden;
   background: var(--color-surface, #fff);
   border: 1px solid var(--color-border, #e5e7eb);
   border-radius: 12px;
-  padding: 18px 20px;
-  box-shadow: var(--shadow, 0 1px 3px rgba(15, 23, 42, 0.06));
+  padding: 18px 20px 16px;
+  box-shadow: var(--shadow);
 }
+.card::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  height: 4px;
+  background: var(--gradient);
+}
+.card-ico { width: 22px; height: 22px; color: #667eea; margin-bottom: 8px; }
 .card-label {
   font-size: 14px;
   color: #94a3b8;

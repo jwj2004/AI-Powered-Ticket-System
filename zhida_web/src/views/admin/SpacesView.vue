@@ -133,7 +133,7 @@ h2 { margin: 0 0 4px; font-size: 18px; }
 .input.grow { flex: 1; min-width: 220px; }
 .btn {
   border: none;
-  background: var(--color-primary);
+  background: var(--gradient);
   color: #fff;
   border-radius: var(--radius-sm);
   padding: 9px 16px;

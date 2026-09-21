@@ -1,34 +1,59 @@
 <template>
   <div class="login-page">
-    <div class="card">
+    <section class="brand">
+      <svg class="deco deco-a" viewBox="0 0 120 120" aria-hidden="true">
+        <circle cx="60" cy="60" r="48" fill="none" stroke="rgba(255,255,255,0.35)" stroke-width="2" />
+        <circle cx="60" cy="60" r="28" fill="rgba(255,255,255,0.12)" />
+      </svg>
+      <svg class="deco deco-b" viewBox="0 0 80 80" aria-hidden="true">
+        <rect x="8" y="8" width="64" height="64" rx="16" fill="none" stroke="rgba(255,255,255,0.4)" stroke-width="2" />
+      </svg>
       <div class="logo">知</div>
       <h1>知答</h1>
-      <p class="sub">企业内部知识库问答</p>
+      <p class="slogan">知答・企业知识库智能问答</p>
+    </section>
+    <section class="form-side">
+      <div class="card">
+        <h2>登录</h2>
+        <p class="sub">使用企业账号进入知识库</p>
 
-      <label class="label">用户名</label>
-      <input v-model="username" class="input" placeholder="请输入用户名" @keyup.enter="onSubmit" />
+        <label class="label">用户名</label>
+        <div class="field">
+          <svg class="field-ico" viewBox="0 0 24 24" aria-hidden="true">
+            <circle cx="12" cy="8" r="3.2" fill="none" stroke="currentColor" stroke-width="1.6" />
+            <path d="M5 19c1.5-3 3.8-4.5 7-4.5S17.5 16 19 19" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" />
+          </svg>
+          <input v-model="username" class="input" placeholder="请输入用户名" @keyup.enter="onSubmit" />
+        </div>
 
-      <label class="label">密码</label>
-      <input
-        v-model="password"
-        type="password"
-        class="input"
-        placeholder="请输入密码"
-        @keyup.enter="onSubmit"
-      />
+        <label class="label">密码</label>
+        <div class="field">
+          <svg class="field-ico" viewBox="0 0 24 24" aria-hidden="true">
+            <rect x="6" y="11" width="12" height="9" rx="2" fill="none" stroke="currentColor" stroke-width="1.6" />
+            <path d="M8 11V8a4 4 0 0 1 8 0v3" fill="none" stroke="currentColor" stroke-width="1.6" />
+          </svg>
+          <input
+            v-model="password"
+            type="password"
+            class="input"
+            placeholder="请输入密码"
+            @keyup.enter="onSubmit"
+          />
+        </div>
 
-      <p v-if="tip" class="tip">{{ tip }}</p>
-      <p v-if="error" class="error">{{ error }}</p>
+        <p v-if="tip" class="tip">{{ tip }}</p>
+        <p v-if="error" class="error">{{ error }}</p>
 
-      <button class="btn" :disabled="loading" @click="onSubmit">
-        {{ loading ? '登录中...' : '登录' }}
-      </button>
+        <button class="btn" :disabled="loading" @click="onSubmit">
+          {{ loading ? '登录中...' : '登录' }}
+        </button>
 
-      <p class="reg">
-        没有账号？
-        <RouterLink to="/register">申请注册</RouterLink>
-      </p>
-    </div>
+        <p class="reg">
+          没有账号？
+          <RouterLink to="/register">申请注册</RouterLink>
+        </p>
+      </div>
+    </section>
   </div>
 </template>
 
@@ -98,118 +123,116 @@ async function onSubmit() {
 .login-page {
   min-height: 100vh;
   display: flex;
+  background: #fff;
+}
+.brand {
+  position: relative;
+  flex: 1.1;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 48px 36px;
+  color: #fff;
+  background: var(--gradient);
+  overflow: hidden;
+}
+.deco { position: absolute; }
+.deco-a { width: 220px; height: 220px; right: -20px; top: -30px; }
+.deco-b { width: 120px; height: 120px; left: 40px; bottom: 48px; }
+.logo {
+  width: 72px;
+  height: 72px;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.16);
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  display: flex;
   align-items: center;
   justify-content: center;
-  padding: 24px;
-  background:
-    radial-gradient(ellipse 80% 60% at 20% 10%, rgba(37, 99, 235, 0.28), transparent 55%),
-    radial-gradient(ellipse 70% 50% at 90% 80%, rgba(59, 130, 246, 0.2), transparent 50%),
-    linear-gradient(160deg, #eff6ff 0%, #f8fafc 45%, #e2e8f0 100%);
+  font-size: 32px;
+  font-weight: 600;
+  margin-bottom: 20px;
+}
+.brand h1 { margin: 0; font-size: 40px; font-weight: 600; }
+.slogan { margin: 10px 0 0; font-size: 18px; font-weight: 400; opacity: 0.92; }
+.form-side {
+  flex: 0.9;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 32px 24px;
+  background: var(--bg-gradient);
 }
 .card {
   width: 100%;
   max-width: 400px;
-  background: var(--color-surface);
-  border-radius: 20px;
-  padding: 40px 36px 30px;
-  box-shadow: var(--shadow-lg);
-  border: 1px solid rgba(255, 255, 255, 0.8);
+  background: #fff;
+  border-radius: 12px;
+  padding: 36px 32px 28px;
+  box-shadow: var(--shadow);
 }
-.logo {
-  width: 56px;
-  height: 56px;
-  margin: 0 auto 14px;
-  border-radius: 16px;
-  background: linear-gradient(145deg, #2563eb, #3b82f6);
-  color: #fff;
-  font-size: 24px;
-  font-weight: 700;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  letter-spacing: 0.02em;
-  box-shadow: 0 8px 20px rgba(37, 99, 235, 0.35);
-}
-h1 {
-  margin: 0;
-  text-align: center;
-  font-size: 28px;
-  color: var(--color-text);
-  font-weight: 700;
-}
-.sub {
-  text-align: center;
-  color: var(--color-text-secondary);
-  margin: 6px 0 26px;
-  font-size: 13px;
-}
-.label {
-  display: block;
-  font-weight: 600;
-  font-size: 13px;
-  margin: 14px 0 6px;
-  color: #374151;
+.card h2 { margin: 0; font-size: 24px; font-weight: 600; }
+.sub { color: var(--color-text-secondary); margin: 6px 0 18px; font-size: 13px; font-weight: 400; }
+.label { display: block; font-weight: 600; font-size: 13px; margin: 14px 0 6px; }
+.field { position: relative; }
+.field-ico {
+  position: absolute;
+  left: 12px;
+  top: 50%;
+  width: 18px;
+  height: 18px;
+  margin-top: -9px;
+  color: #94a3b8;
 }
 .input {
   width: 100%;
-  padding: 11px 14px;
+  padding: 11px 14px 11px 40px;
   border: 1px solid var(--color-border);
-  border-radius: var(--radius);
+  border-radius: 12px;
   background: #fff;
-  transition: border-color 0.15s, box-shadow 0.15s;
+  transition: border-color 0.2s, box-shadow 0.2s;
 }
 .input:focus {
   outline: none;
-  border-color: var(--color-primary);
-  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.18);
+  border-color: #667eea;
+  box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.18);
 }
 .btn {
   width: 100%;
   margin-top: 22px;
   padding: 12px;
   border: none;
-  border-radius: var(--radius);
-  background: var(--color-primary);
+  border-radius: 12px;
+  background: var(--gradient);
   color: #fff;
   font-weight: 600;
   cursor: pointer;
-  transition: background 0.15s, box-shadow 0.15s;
-  box-shadow: 0 4px 12px rgba(37, 99, 235, 0.25);
+  transition: filter 0.2s, box-shadow 0.2s, transform 0.15s;
+  box-shadow: 0 8px 18px rgba(102, 126, 234, 0.35);
 }
-.btn:hover:not(:disabled) {
-  background: var(--color-primary-hover);
-}
-.btn:disabled {
-  background: var(--color-primary-muted);
-  cursor: not-allowed;
-  box-shadow: none;
-}
-.error {
-  color: var(--color-danger);
-  margin: 10px 0 0;
-  font-size: 13px;
-}
+.btn:hover:not(:disabled) { filter: brightness(1.06); }
+.btn:disabled { opacity: 0.65; cursor: not-allowed; box-shadow: none; }
+.error { color: var(--color-danger); margin: 10px 0 0; font-size: 13px; }
 .tip {
   margin: 10px 0 0;
   font-size: 13px;
   color: var(--color-warn);
   background: #fffbeb;
   border: 1px solid #fde68a;
-  border-radius: var(--radius-sm);
+  border-radius: 12px;
   padding: 8px 10px;
 }
-.reg {
-  margin-top: 14px;
-  text-align: center;
-  font-size: 13px;
-  color: #6b7280;
-}
+.reg { margin-top: 16px; text-align: center; font-size: 13px; color: #64748b; }
 .reg a {
-  color: var(--color-primary);
+  color: #667eea;
   text-decoration: none;
   font-weight: 600;
+  margin-left: 4px;
 }
-.reg a:hover {
-  text-decoration: underline;
+.reg a:hover { color: #764ba2; }
+@media (max-width: 720px) {
+  .login-page { flex-direction: column; }
+  .brand { padding: 40px 28px; min-height: 240px; }
+  .brand h1 { font-size: 32px; }
 }
 </style>

@@ -40,7 +40,8 @@
                 title="处理"
                 @click="openResolve(g)"
               >
-                ✓ 处理
+                <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12l5 5L20 7" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                处理
               </button>
               <button type="button" class="action-btn" @click="openMerge(g)">合并</button>
               <span v-if="g.status !== 'pending'" class="muted">已处理</span>
@@ -266,7 +267,7 @@ tbody tr:hover { background: #eff6ff; }
 }
 .btn {
   border: none;
-  background: var(--color-primary);
+  background: var(--gradient);
   color: #fff;
   border-radius: var(--radius-sm);
   padding: 9px 16px;
@@ -280,7 +281,8 @@ tbody tr:hover { background: #eff6ff; }
 .modal-mask {
   position: fixed;
   inset: 0;
-  background: rgba(15, 23, 42, 0.4);
+  background: rgba(15, 23, 42, 0.35);
+  backdrop-filter: blur(8px);
   display: flex;
   align-items: center;
   justify-content: center;

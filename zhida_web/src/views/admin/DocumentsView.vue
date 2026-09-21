@@ -34,10 +34,22 @@
             <td>{{ formatTime(d.updated_at) }}</td>
             <td>{{ d.citation_count ?? 0 }}</td>
             <td class="ops">
-              <button type="button" class="action-btn" @click="openPreview(d)">👁 预览</button>
-              <button type="button" class="action-btn" @click="openVersions(d)">🕘 历史</button>
-              <button type="button" class="action-btn" @click="openEdit(d)">✎ 编辑</button>
-              <button type="button" class="action-btn danger" @click="onDelete(d)">✕ 删除</button>
+              <button type="button" class="action-btn" @click="openPreview(d)">
+                <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12z" fill="none" stroke="currentColor" stroke-width="1.6"/><circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" stroke-width="1.6"/></svg>
+                预览
+              </button>
+              <button type="button" class="action-btn" @click="openVersions(d)">
+                <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M12 8v5l3 2" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+                历史
+              </button>
+              <button type="button" class="action-btn" @click="openEdit(d)">
+                <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h4l10-10-4-4L4 16v4z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg>
+                编辑
+              </button>
+              <button type="button" class="action-btn danger" @click="onDelete(d)">
+                <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+                删除
+              </button>
             </td>
           </tr>
         </tbody>
@@ -413,14 +425,14 @@ h2 { margin: 0 0 4px; font-size: 18px; }
 .muted { color: var(--color-text-secondary); margin: 0; font-size: 13px; }
 .btn {
   border: none;
-  background: var(--color-primary);
+  background: var(--gradient);
   color: #fff;
   border-radius: var(--radius-sm);
   padding: 9px 16px;
   font-weight: 600;
   cursor: pointer;
 }
-.btn:hover:not(:disabled) { background: var(--color-primary-hover); }
+.btn:hover:not(:disabled) { filter: brightness(1.06); }
 .btn:disabled { background: var(--color-primary-muted); cursor: not-allowed; }
 .table-wrap { overflow: auto; }
 table {
@@ -483,7 +495,8 @@ tbody tr.stale:hover { background: #fffbeb; }
 .modal-mask {
   position: fixed;
   inset: 0;
-  background: rgba(15, 23, 42, 0.4);
+  background: rgba(15, 23, 42, 0.35);
+  backdrop-filter: blur(8px);
   display: flex;
   align-items: center;
   justify-content: center;
