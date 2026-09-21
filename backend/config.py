@@ -32,7 +32,7 @@ class Settings(BaseSettings):
 
     # 检索增强：候选池 → BM25+向量融合 → cross-encoder 重排
     retrieve_candidate_k: int = 10
-    retrieve_top_k: int = 5
+    retrieve_top_k: int = 3
     enable_query_rewrite: bool = True
     enable_hybrid_retrieve: bool = True
     enable_cross_encoder: bool = False

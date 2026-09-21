@@ -525,6 +525,17 @@ def list_notifications(user_id: int) -> list[dict[str, Any]]:
 _HOT_KEY_RE = re.compile(r"[\s？?！!。，,、.；;：:]+")
 
 
+def clear_hot_cache() -> int:
+    """删掉热缓存。答案存在 SQLite，重启进程不会自动失效。"""
+    conn = get_conn()
+    try:
+        cur = conn.execute("DELETE FROM hot_cache")
+        conn.commit()
+        return cur.rowcount
+    finally:
+        conn.close()
+
+
 def normalize_question_key(question: str) -> str:
     return _HOT_KEY_RE.sub("", (question or "").strip().lower())
 

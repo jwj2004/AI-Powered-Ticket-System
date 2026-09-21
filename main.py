@@ -72,6 +72,14 @@ async def startup_event():
     from app.services.vector_retriever import VectorRetriever
 
     ensure_chunk_type_column()
+    from backend.config import get_settings as get_b_settings
+    from backend import store
+
+    b_settings = get_b_settings()
+    log.info(f"B llm_api_key 长度: {len((b_settings.llm_api_key or '').strip())}")
+    store.init_db()
+    cleared = store.clear_hot_cache()
+    log.info(f"热缓存已清空，删除 {cleared} 条")
     VectorRetriever.ensure_init()
     log.success("向量模型加载完成")
 
