@@ -12,24 +12,29 @@ LOW_MESSAGE = "这个问题我没找到可靠依据，已记录，管理员补�
 REFUSE_MESSAGE = "这个问题不属于内部知识范围，我无法给出可靠依据。"
 
 _CHITCHAT_RE = re.compile(
-    r"(天气|写诗|一首诗|笑话|讲个故事|你是谁|今天星期|帮我聊天|谈恋爱)",
+    r"(天气|写诗|一首诗|笑话|讲个故事|你是谁|今天星期|帮我聊天|聊聊|谈恋爱)",
+    re.I,
+)
+_PURE_GREETING_RE = re.compile(
+    r"^(你好|您好|嗨|hi|hello|哈喽|在吗|早上好|晚上好|再见|谢谢|谢谢你|感谢|多谢)[!！。.~～\s]*$",
     re.I,
 )
 _KNOWLEDGE_RE = re.compile(
     r"(订单|导出|支付|回调|优惠券|核销|物流|工单|错误码|超时|登录|配置|文档|版本|排查|失败)",
+    re.I,
 )
 
 
 def classify_route(question: str) -> str:
-    """返回 lookup / rag / refuse。"""
+    """返回 lookup / rag / refuse。除明确闲聊外都先检索。"""
     text = (question or "").strip()
     if not text:
         return "refuse"
     if extract_error_code(text):
         return "lookup"
-    if _CHITCHAT_RE.search(text) and not _KNOWLEDGE_RE.search(text):
+    if _PURE_GREETING_RE.match(text):
         return "refuse"
-    if not _KNOWLEDGE_RE.search(text) and len(text) < 8:
+    if _CHITCHAT_RE.search(text) and not _KNOWLEDGE_RE.search(text):
         return "refuse"
     return "rag"
 

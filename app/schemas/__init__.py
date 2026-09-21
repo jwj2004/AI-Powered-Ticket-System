@@ -8,4 +8,5 @@ from app.schemas.contract import (  # noqa: F401
     RetrieveRequest,
     RetrieveResponse,
     RetrieveTicket,
+    RetrieveChunk,
 )

@@ -80,7 +80,17 @@ class RetrieveTicket(BaseModel):
     score: float = Field(..., description="相似度得分")
 
 
+class RetrieveChunk(BaseModel):
+    """检索到的文档切块"""
+    document_id: int
+    title: str = ""
+    chunk_index: int = 0
+    content: str = ""
+    score: float = 0.0
+
+
 class RetrieveResponse(BaseModel):
     """内部检索响应"""
     error_code: Optional[str] = Field(None, description="识别到的错误码，未识别为 null")
     tickets: List[RetrieveTicket] = Field(default_factory=list, description="相似工单列表")
+    chunks: List[RetrieveChunk] = Field(default_factory=list, description="相似文档切块")
